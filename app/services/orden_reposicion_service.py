@@ -222,7 +222,7 @@ class OrdenReposicionService:
                 detail="Solo una orden pendiente puede eliminarse"
             )
 
-        eliminado = await self.repository.eliminar(
+        return await self.repository.eliminar(
             id_orden
         )
 

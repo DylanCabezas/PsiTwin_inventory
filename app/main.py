@@ -4,13 +4,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
-from app.config.settings import get_settings
+from app.config.settings import (
+    get_settings
+)
 
 from app.database.mongodb import (
     connect_to_mongo,
     close_mongo_connection,
     get_database
 )
+
 
 # ============================================================
 # CONTROLLERS
@@ -68,6 +71,18 @@ from app.controllers.detalle_recepcion_controller import (
     router as detalle_recepcion_router
 )
 
+from app.controllers.alerta_controller import (
+    router as alerta_router
+)
+
+from app.controllers.recomendacion_controller import (
+    router as recomendacion_router
+)
+
+from app.controllers.inventory_risk_controller import (
+    router as inventory_risk_router
+)
+
 
 # ============================================================
 # SETTINGS
@@ -81,14 +96,14 @@ settings = get_settings()
 # ============================================================
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(
+    app: FastAPI
+):
 
-    # Conectar MongoDB al iniciar FastAPI
     await connect_to_mongo()
 
     yield
 
-    # Cerrar conexión MongoDB al detener FastAPI
     await close_mongo_connection()
 
 
@@ -97,17 +112,23 @@ async def lifespan(app: FastAPI):
 # ============================================================
 
 app = FastAPI(
-    title=settings.app_name,
 
-    version="1.0.0",
+    title=
+        settings.app_name,
+
+    version=
+        "1.1.0",
 
     description=(
         "API de gestión inteligente de inventario, "
-        "almacenes, movimientos, reposición y recepción "
-        "de mercadería para PsiTwin"
+        "almacenes, movimientos, reposición, "
+        "recepción de mercadería, alertas, "
+        "recomendaciones y evaluación de riesgo "
+        "para PsiTwin."
     ),
 
-    lifespan=lifespan
+    lifespan=
+        lifespan
 )
 
 
@@ -124,22 +145,36 @@ app = FastAPI(
 async def root():
 
     return {
+
         "mensaje":
             "PsiTwin Inventory API funcionando",
 
         "version":
-            "1.0.0"
+            "1.1.0",
+
+        "modulos": [
+            "Empresa",
+            "Almacen",
+            "Zona",
+            "Rack",
+            "Producto",
+            "Inventario",
+            "Operario",
+            "Movimiento",
+            "Proveedor",
+            "OrdenReposicion",
+            "DetalleReposicion",
+            "RecepcionMercaderia",
+            "DetalleRecepcion",
+            "Alertas",
+            "Recomendaciones",
+            "InventoryRisk"
+        ]
     }
 
 
 # ============================================================
 # HEALTH
-#
-# Comprueba:
-#
-# API
-# +
-# MongoDB
 #
 # GET /health
 # ============================================================
@@ -153,13 +188,16 @@ async def health():
 
     try:
 
-        database = get_database()
+        database = (
+            get_database()
+        )
 
         await database.command(
             "ping"
         )
 
         return {
+
             "status":
                 "healthy",
 
@@ -173,12 +211,13 @@ async def health():
                 settings.mongodb_database,
 
             "version":
-                "1.0.0"
+                "1.1.0"
         }
 
     except Exception as exc:
 
         return {
+
             "status":
                 "unhealthy",
 
@@ -192,7 +231,7 @@ async def health():
                 str(exc),
 
             "version":
-                "1.0.0"
+                "1.1.0"
         }
 
 
@@ -200,37 +239,53 @@ async def health():
 # ROUTERS
 # ============================================================
 #
-# Estructura:
+# EMPRESA
+#   ↓
+# ALMACEN
+#   ↓
+# ZONA
+#   ↓
+# RACK
 #
-# Empresa
+# PRODUCTO
 #   ↓
-# Almacen
+# INVENTARIO
 #   ↓
-# Zona
-#   ↓
-# Rack
+# MOVIMIENTO
 #
-# Producto
+# PROVEEDOR
 #   ↓
-# Inventario
+# ORDEN REPOSICION
 #   ↓
-# Movimiento
+# DETALLE REPOSICION
+#   ↓
+# RECEPCION MERCADERIA
+#   ↓
+# DETALLE RECEPCION
+#   ↓
+# MOVIMIENTO AUTOMATICO
+#   ↓
+# INVENTARIO
 #
-# Operario ────────────────┘
+# CAPA DE INTELIGENCIA
 #
-# Proveedor
-#   ↓
-# OrdenReposicion
-#   ↓
-# DetalleReposicion
-#   ↓
-# RecepcionMercaderia
-#   ↓
-# DetalleRecepcion
-#   ↓
-# Movimiento automático
-#   ↓
-# Inventario
+# INVENTARIO
+# +
+# MOVIMIENTOS
+# +
+# PRODUCTO
+# +
+# LEAD TIME
+#       ↓
+# INVENTORY RISK
+#       ↓
+# ALERTA
+#       ↓
+# RECOMENDACION
+#       ↓
+# FORECAST ML
+#       ↓
+# LLM
 #
 # ============================================================
 
@@ -326,7 +381,7 @@ app.include_router(
 
 
 # ============================================================
-# ORDEN DE REPOSICION
+# ORDEN REPOSICION
 # ============================================================
 
 app.include_router(
@@ -336,7 +391,7 @@ app.include_router(
 
 
 # ============================================================
-# DETALLE DE REPOSICION
+# DETALLE REPOSICION
 # ============================================================
 
 app.include_router(
@@ -346,7 +401,7 @@ app.include_router(
 
 
 # ============================================================
-# RECEPCION DE MERCADERIA
+# RECEPCION MERCADERIA
 # ============================================================
 
 app.include_router(
@@ -356,10 +411,40 @@ app.include_router(
 
 
 # ============================================================
-# DETALLE DE RECEPCION
+# DETALLE RECEPCION
 # ============================================================
 
 app.include_router(
     detalle_recepcion_router,
+    prefix=settings.api_prefix
+)
+
+
+# ============================================================
+# ALERTAS
+# ============================================================
+
+app.include_router(
+    alerta_router,
+    prefix=settings.api_prefix
+)
+
+
+# ============================================================
+# RECOMENDACIONES
+# ============================================================
+
+app.include_router(
+    recomendacion_router,
+    prefix=settings.api_prefix
+)
+
+
+# ============================================================
+# INVENTORY RISK
+# ============================================================
+
+app.include_router(
+    inventory_risk_router,
     prefix=settings.api_prefix
 )
