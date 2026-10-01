@@ -25,6 +25,7 @@ class MotivoMovimiento(str, Enum):
 class MovimientoCreate(BaseModel):
     id_inventario: str
     id_operario: str
+    id_detalle_recepcion: Optional[str] = None
 
     tipo_movimiento: TipoMovimiento
     motivo_movimiento: MotivoMovimiento
@@ -41,6 +42,7 @@ class MovimientoResponse(BaseModel):
     id_movimiento: str
 
     id_inventario: str
+    id_detalle_recepcion: Optional[str] = None
     id_producto: str
     id_rack: str
     id_operario: str

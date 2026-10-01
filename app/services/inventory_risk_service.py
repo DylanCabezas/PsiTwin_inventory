@@ -8,6 +8,8 @@ from datetime import (
 
 from statistics import pstdev
 
+import pandas as pd
+
 from fastapi import HTTPException
 
 from app.repositories.inventory_risk_repository import (
@@ -19,6 +21,7 @@ from app.dto.inventory_risk_dto import (
     ConsumoInfo,
     CoberturaInfo,
     ForecastInfo,
+    ForecastDiario,
     SeguridadInfo,
     RiesgoInfo,
     ReposicionInfo
@@ -43,10 +46,34 @@ from app.services.recomendacion_service import (
     RecomendacionService
 )
 
+from app.ml.demand_history import (
+    DemandHistory
+)
+
+from app.ml.model_loader import (
+    ModelLoader
+)
+
+from app.ml.feature_builder import (
+    FeatureBuilder
+)
+
+from app.ml.predictor import (
+    DemandPredictor
+)
+
+from app.ml.ml_context_builder import (
+    MLContextBuilder
+)
+
 
 class InventoryRiskService:
 
     def __init__(self):
+
+        # ========================================================
+        # REPOSITORIOS / SERVICIOS
+        # ========================================================
 
         self.repository = (
             InventoryRiskRepository()
@@ -60,8 +87,44 @@ class InventoryRiskService:
             RecomendacionService()
         )
 
+        # ========================================================
+        # PIPELINE ML
+        # ========================================================
+
+        self.demand_history = (
+            DemandHistory()
+        )
+
+        self.model_loader = (
+            ModelLoader()
+        )
+
+        self.feature_builder = (
+            FeatureBuilder(
+                loader=self.model_loader
+            )
+        )
+
+        self.predictor = (
+            DemandPredictor()
+        )
+
+        self.ml_context_builder = (
+            MLContextBuilder()
+        )
+
+        # ========================================================
+        # CONFIGURACION
+        # ========================================================
+
         # Nivel de servicio aproximado del 95%
         self.z_service_level = 1.645
+
+        # Historial utilizado por LightGBM.
+        self.forecast_history_days = 30
+
+        # Horizonte actual del modelo.
+        self.forecast_horizon = 7
 
     # ========================================================
     # CONVERSION SEGURA
@@ -74,12 +137,22 @@ class InventoryRiskService:
     ) -> float:
 
         try:
-            return float(value)
+
+            valor = float(value)
+
+            if math.isnan(valor):
+                return default
+
+            if math.isinf(valor):
+                return default
+
+            return valor
 
         except (
             TypeError,
             ValueError
         ):
+
             return default
 
     # ========================================================
@@ -183,6 +256,310 @@ class InventoryRiskService:
                 ] += cantidad
 
         return consumos
+
+    # ========================================================
+    # NORMALIZAR FECHA
+    # ========================================================
+
+    @staticmethod
+    def _normalizar_datetime(
+        value
+    ) -> datetime:
+
+        fecha = pd.to_datetime(
+            value
+        )
+
+        if isinstance(
+            fecha,
+            pd.Timestamp
+        ):
+
+            fecha = (
+                fecha.to_pydatetime()
+            )
+
+        if fecha.tzinfo is None:
+
+            fecha = fecha.replace(
+                tzinfo=timezone.utc
+            )
+
+        return fecha
+
+    # ========================================================
+    # GENERAR FORECAST LIGHTGBM
+    # ========================================================
+
+    async def _generar_forecast(
+        self,
+        id_inventario: str
+    ) -> tuple[
+        ForecastInfo,
+        datetime
+    ]:
+
+        # ----------------------------------------------------
+        # 1. HISTORIAL
+        # ----------------------------------------------------
+
+        historial = (
+            await self.demand_history
+            .obtener_ultimos_dias(
+                id_inventario=
+                    id_inventario,
+
+                dias=
+                    self.forecast_history_days
+            )
+        )
+
+        if not historial:
+
+            raise ValueError(
+                "No existe historial de demanda "
+                "para generar el forecast."
+            )
+
+        history_df = pd.DataFrame(
+            historial
+        )
+
+        if history_df.empty:
+
+            raise ValueError(
+                "El historial de demanda está vacío."
+            )
+
+        required_columns = {
+            "fecha",
+            "demanda"
+        }
+
+        missing_columns = (
+            required_columns
+            - set(
+                history_df.columns
+            )
+        )
+
+        if missing_columns:
+
+            raise ValueError(
+                "DemandHistory no devolvió las "
+                "columnas necesarias: "
+                + ", ".join(
+                    sorted(
+                        missing_columns
+                    )
+                )
+            )
+
+        # ----------------------------------------------------
+        # 2. FECHA BASE
+        # ----------------------------------------------------
+
+        history_df[
+            "fecha"
+        ] = pd.to_datetime(
+            history_df[
+                "fecha"
+            ]
+        )
+
+        fecha_base_timestamp = (
+            history_df[
+                "fecha"
+            ].max()
+        )
+
+        fecha_base = (
+            self._normalizar_datetime(
+                fecha_base_timestamp
+            )
+        )
+
+        # ----------------------------------------------------
+        # 3. D+1 ... D+7
+        # ----------------------------------------------------
+
+        predicciones_diarias = []
+
+        for horizon in range(
+            1,
+            self.forecast_horizon + 1
+        ):
+
+            # ------------------------------------------------
+            # CONTEXTO ESPECIFICO DEL HORIZONTE
+            #
+            # Aquí entran:
+            #
+            # store_sales_*
+            # dept_sales_*
+            # item_total_*
+            # future_store_lag_7
+            # future_dept_lag_7
+            #
+            # Las future hierarchical cambian según:
+            #
+            # effective_lag = 7 - horizon
+            # ------------------------------------------------
+
+            context = (
+                await self.ml_context_builder
+                .build_feature_context(
+                    id_inventario=
+                        id_inventario,
+
+                    fecha_base=
+                        fecha_base_timestamp,
+
+                    horizon=
+                        horizon
+                )
+            )
+
+            # ------------------------------------------------
+            # FEATURES
+            # ------------------------------------------------
+
+            features = (
+                self.feature_builder
+                .build_demand_features(
+                    history=
+                        history_df,
+
+                    horizon=
+                        horizon,
+
+                    context=
+                        context
+                )
+            )
+
+            # ------------------------------------------------
+            # LIGHTGBM
+            # ------------------------------------------------
+
+            prediccion = (
+                self.predictor
+                .predict_horizon(
+                    features=
+                        features,
+
+                    horizon=
+                        horizon
+                )
+            )
+
+            demanda_predicha = max(
+                0.0,
+                self._safe_float(
+                    prediccion
+                )
+            )
+
+            fecha_objetivo = (
+                fecha_base
+                + timedelta(
+                    days=horizon
+                )
+            )
+
+            predicciones_diarias.append(
+
+                ForecastDiario(
+
+                    fecha=
+                        fecha_objetivo,
+
+                    demanda_predicha=
+                        round(
+                            demanda_predicha,
+                            4
+                        )
+                )
+            )
+
+        # ----------------------------------------------------
+        # 4. DEMANDA TOTAL
+        # ----------------------------------------------------
+
+        demanda_7d = sum(
+
+            prediccion.demanda_predicha
+
+            for prediccion
+            in predicciones_diarias
+        )
+
+        demanda_7d = round(
+            demanda_7d,
+            4
+        )
+
+        # ----------------------------------------------------
+        # RESPONSE FORECAST
+        #
+        # fecha_quiebre_estimada se calcula después,
+        # porque necesitamos conocer stock_actual.
+        # ----------------------------------------------------
+
+        forecast = ForecastInfo(
+
+            demanda_7d=
+                demanda_7d,
+
+            fecha_quiebre_estimada=
+                None,
+
+            predicciones_diarias=
+                predicciones_diarias
+        )
+
+        return (
+            forecast,
+            fecha_base
+        )
+
+    # ========================================================
+    # FECHA ESTIMADA DE QUIEBRE
+    # ========================================================
+
+    @staticmethod
+    def _calcular_fecha_quiebre(
+        stock_actual: float,
+        forecast: ForecastInfo,
+        fecha_base: datetime
+    ) -> datetime | None:
+
+        # Ya no existe stock.
+        if stock_actual <= 0:
+
+            return fecha_base
+
+        acumulado = 0.0
+
+        for prediccion in (
+            forecast.predicciones_diarias
+        ):
+
+            acumulado += (
+                prediccion.demanda_predicha
+            )
+
+            if acumulado >= stock_actual:
+
+                return (
+                    prediccion.fecha
+                )
+
+        # El forecast solamente cubre 7 días.
+        #
+        # Si no se agota dentro de esos 7 días,
+        # no inventamos una fecha posterior.
+        return None
 
     # ========================================================
     # NIVEL DE RIESGO
@@ -357,6 +734,7 @@ class InventoryRiskService:
         )
 
         return ReposicionInfo(
+
             cantidad_minima=
                 cantidad_minima,
 
@@ -433,20 +811,6 @@ class InventoryRiskService:
                 detail=(
                     "Producto asociado "
                     "no encontrado"
-                )
-            )
-
-        id_empresa = producto.get(
-            "id_empresa"
-        )
-
-        if not id_empresa:
-
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "El producto no tiene "
-                    "id_empresa"
                 )
             )
 
@@ -551,6 +915,41 @@ class InventoryRiskService:
             )
 
         # ----------------------------------------------------
+        # EMPRESA
+        #
+        # Jerarquía:
+        #
+        # Producto
+        #   ↓
+        # Rack
+        #   ↓
+        # Zona
+        #   ↓
+        # Almacén
+        #   ↓
+        # Empresa
+        # ----------------------------------------------------
+
+        id_empresa = (
+            almacen.get(
+                "id_empresa"
+            )
+            or producto.get(
+                "id_empresa"
+            )
+        )
+
+        if not id_empresa:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "No se pudo determinar "
+                    "la empresa del inventario"
+                )
+            )
+
+        # ----------------------------------------------------
         # DATOS BASE
         # ----------------------------------------------------
 
@@ -571,8 +970,63 @@ class InventoryRiskService:
             or 0
         )
 
-        ahora = datetime.now(
-            timezone.utc
+        # ----------------------------------------------------
+        # FORECAST LIGHTGBM
+        # ----------------------------------------------------
+
+        try:
+
+            (
+                forecast,
+                fecha_base_forecast
+            ) = await self._generar_forecast(
+                id_inventario=
+                    id_inventario
+            )
+
+        except Exception as exc:
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "No se pudo generar el forecast "
+                    "LightGBM para evaluar el riesgo: "
+                    f"{str(exc)}"
+                )
+            )
+
+        # ----------------------------------------------------
+        # FECHA DE QUIEBRE ESTIMADA
+        # ----------------------------------------------------
+
+        forecast.fecha_quiebre_estimada = (
+            self._calcular_fecha_quiebre(
+                stock_actual=
+                    stock_actual,
+
+                forecast=
+                    forecast,
+
+                fecha_base=
+                    fecha_base_forecast
+            )
+        )
+
+        # ----------------------------------------------------
+        # FECHA DE REFERENCIA
+        #
+        # Usamos la misma fecha base del forecast para que:
+        #
+        # historial
+        # features
+        # forecast
+        # riesgo
+        #
+        # queden temporalmente alineados.
+        # ----------------------------------------------------
+
+        ahora = (
+            fecha_base_forecast
         )
 
         fecha_28d = (
@@ -589,6 +1043,7 @@ class InventoryRiskService:
         movimientos = (
             await self.repository
             .obtener_salidas_desde(
+
                 id_inventario=
                     id_inventario,
 
@@ -627,6 +1082,14 @@ class InventoryRiskService:
             ):
                 continue
 
+            # Normalizar timezone para evitar comparar
+            # datetime naive contra datetime aware.
+            if fecha.tzinfo is None:
+
+                fecha = fecha.replace(
+                    tzinfo=timezone.utc
+                )
+
             cantidad = (
                 self._safe_float(
                     movimiento.get(
@@ -645,7 +1108,7 @@ class InventoryRiskService:
                 total_7d += cantidad
 
         # ----------------------------------------------------
-        # PROMEDIOS
+        # PROMEDIOS HISTORICOS
         # ----------------------------------------------------
 
         promedio_7d = (
@@ -669,21 +1132,60 @@ class InventoryRiskService:
             )
         )
 
-        consumo_diario = (
+        # ----------------------------------------------------
+        # CONSUMO HISTORICO DE REFERENCIA
+        # ----------------------------------------------------
+
+        consumo_historico_diario = (
             promedio_7d
         )
 
-        if consumo_diario <= 0:
+        if consumo_historico_diario <= 0:
 
-            consumo_diario = (
+            consumo_historico_diario = (
                 promedio_14d
             )
 
-        if consumo_diario <= 0:
+        if consumo_historico_diario <= 0:
 
-            consumo_diario = (
+            consumo_historico_diario = (
                 promedio_28d
             )
+
+        # ----------------------------------------------------
+        # DEMANDA FORECAST PROMEDIO
+        # ----------------------------------------------------
+
+        forecast_promedio_diario = 0.0
+
+        if (
+            forecast.demanda_7d
+            is not None
+        ):
+
+            forecast_promedio_diario = (
+                forecast.demanda_7d
+                / self.forecast_horizon
+            )
+
+        # ----------------------------------------------------
+        # DEMANDA OPERATIVA
+        #
+        # Usamos el mayor entre:
+        #
+        # 1. consumo histórico reciente
+        # 2. demanda pronosticada por LightGBM
+        #
+        # Esto permite que LightGBM aumente preventivamente
+        # el riesgo cuando detecta crecimiento futuro,
+        # pero evita que una predicción muy baja reduzca
+        # artificialmente la protección del inventario.
+        # ----------------------------------------------------
+
+        consumo_diario = max(
+            consumo_historico_diario,
+            forecast_promedio_diario
+        )
 
         # ----------------------------------------------------
         # TENDENCIA
@@ -730,7 +1232,9 @@ class InventoryRiskService:
 
         desviacion = 0.0
 
-        if len(consumos_diarios) > 1:
+        if len(
+            consumos_diarios
+        ) > 1:
 
             desviacion = pstdev(
                 consumos_diarios
@@ -767,6 +1271,8 @@ class InventoryRiskService:
 
         # ----------------------------------------------------
         # PUNTO DE REPOSICION
+        #
+        # Ahora la demanda puede incorporar LightGBM.
         # ----------------------------------------------------
 
         demanda_lead_time = (
@@ -790,6 +1296,7 @@ class InventoryRiskService:
 
         nivel_riesgo = (
             self._calcular_nivel_riesgo(
+
                 stock_actual=
                     stock_actual,
 
@@ -806,6 +1313,7 @@ class InventoryRiskService:
 
         score = (
             self._calcular_score(
+
                 stock_actual=
                     stock_actual,
 
@@ -822,10 +1330,13 @@ class InventoryRiskService:
 
         # ----------------------------------------------------
         # REPOSICION
+        #
+        # También utiliza la demanda operativa.
         # ----------------------------------------------------
 
         reposicion = (
             self._calcular_reposicion(
+
                 stock_actual=
                     stock_actual,
 
@@ -847,9 +1358,9 @@ class InventoryRiskService:
         if consumo_diario <= 0:
 
             explicacion = (
-                "No existe consumo reciente "
-                "suficiente para calcular una "
-                "cobertura representativa."
+                "No existe consumo reciente ni una "
+                "demanda pronosticada suficiente para "
+                "calcular una cobertura representativa."
             )
 
         elif (
@@ -862,6 +1373,9 @@ class InventoryRiskService:
                 f"aproximada de {dias_cobertura} días, "
                 f"mientras que el tiempo de reposición "
                 f"es de {lead_time_dias} días. "
+                f"LightGBM pronostica una demanda de "
+                f"{forecast.demanda_7d} unidades para "
+                f"los próximos 7 días. "
                 f"Existe riesgo crítico de quiebre "
                 f"de stock."
             )
@@ -875,7 +1389,11 @@ class InventoryRiskService:
                 f"El stock actual ({stock_actual}) "
                 f"se encuentra por debajo o cerca "
                 f"del punto de reposición "
-                f"({punto_reposicion})."
+                f"({punto_reposicion}). "
+                f"LightGBM pronostica "
+                f"{forecast.demanda_7d} unidades "
+                f"de demanda para los próximos "
+                f"7 días."
             )
 
         elif (
@@ -887,7 +1405,9 @@ class InventoryRiskService:
                 f"La cobertura actual es de "
                 f"{dias_cobertura} días y se está "
                 f"acercando al tiempo necesario "
-                f"para reponer el producto."
+                f"para reponer el producto. "
+                f"El forecast de 7 días es de "
+                f"{forecast.demanda_7d} unidades."
             )
 
         else:
@@ -895,9 +1415,12 @@ class InventoryRiskService:
             if dias_cobertura is None:
 
                 explicacion = (
-                    "El producto no presenta "
-                    "consumo reciente suficiente "
-                    "para estimar riesgo de quiebre."
+                    f"El producto no presenta una "
+                    f"demanda suficiente para estimar "
+                    f"riesgo de quiebre. "
+                    f"El forecast de LightGBM para "
+                    f"los próximos 7 días es de "
+                    f"{forecast.demanda_7d} unidades."
                 )
 
             else:
@@ -905,8 +1428,11 @@ class InventoryRiskService:
                 explicacion = (
                     f"El inventario presenta una "
                     f"cobertura aproximada de "
-                    f"{dias_cobertura} días y "
-                    f"actualmente no presenta un "
+                    f"{dias_cobertura} días. "
+                    f"LightGBM pronostica "
+                    f"{forecast.demanda_7d} unidades "
+                    f"para los próximos 7 días y "
+                    f"actualmente no se detecta un "
                     f"riesgo significativo."
                 )
 
@@ -958,14 +1484,15 @@ class InventoryRiskService:
             ),
 
             cobertura=CoberturaInfo(
-                dias=dias_cobertura
+                dias=
+                    dias_cobertura
             ),
 
             lead_time_dias=
                 lead_time_dias,
 
-            # LightGBM todavía no conectado
-            forecast=ForecastInfo(),
+            forecast=
+                forecast,
 
             seguridad=SeguridadInfo(
 
@@ -1021,7 +1548,10 @@ class InventoryRiskService:
             NivelRiesgo.ALTO,
             NivelRiesgo.CRITICO
         ):
-
+            await self.alerta_service.resolver_activa_por_inventario(
+                resultado.id_inventario,
+                TipoAlerta.RIESGO_STOCKOUT
+            )
             return
 
         if (
@@ -1043,6 +1573,7 @@ class InventoryRiskService:
 
         alerta = (
             await self.alerta_service.crear(
+
                 AlertaCreate(
 
                     id_empresa=
@@ -1146,7 +1677,7 @@ class InventoryRiskService:
                     resultado.explicacion,
 
                 origen=
-                    "MOTOR_SEGURIDAD"
+                    "MOTOR_SEGURIDAD_LIGHTGBM"
             )
         )
 
@@ -1174,31 +1705,27 @@ class InventoryRiskService:
                 inventario.get(
                     "id_inventario"
                 )
+                or inventario.get(
+                    "id"
+                )
             )
 
             if not id_inventario:
                 continue
 
-            try:
+            resultado = (
+                await self.evaluar(
 
-                resultado = (
-                    await self.evaluar(
-                        id_inventario=
-                            id_inventario,
+                    id_inventario=
+                        id_inventario,
 
-                        generar_alertas=
-                            generar_alertas
-                    )
+                    generar_alertas=
+                        generar_alertas
                 )
+            )
 
-                resultados.append(
-                    resultado
-                )
-
-            except HTTPException:
-                continue
-
-            except Exception:
-                continue
+            resultados.append(
+                resultado
+            )
 
         return resultados

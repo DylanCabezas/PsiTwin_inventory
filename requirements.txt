@@ -6,5 +6,9 @@ pydantic
 pydantic-settings
 email-validator
 pwdlib[argon2]
+bcrypt
 PyJWT
 python-dotenv
+lightgbm
+pandas
+numpy

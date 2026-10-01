@@ -6,7 +6,8 @@ from fastapi import HTTPException
 from app.dto.alerta_dto import (
     AlertaCreate,
     AlertaEstadoUpdate,
-    EstadoAlerta
+    EstadoAlerta,
+    TipoAlerta
 )
 
 from app.repositories.alerta_repository import (
@@ -266,3 +267,23 @@ class AlertaService:
         )
 
         return alerta_actualizada
+
+    async def resolver_activa_por_inventario(
+        self,
+        id_inventario: str,
+        tipo_alerta: TipoAlerta
+    ):
+        alerta = await self.repository.buscar_activa(
+            id_inventario,
+            tipo_alerta.value
+        )
+
+        if not alerta:
+            return None
+
+        return await self.cambiar_estado(
+            alerta["id_alerta"],
+            AlertaEstadoUpdate(
+                estado=EstadoAlerta.RESUELTA
+            )
+        )

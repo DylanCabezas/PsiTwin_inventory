@@ -9,17 +9,53 @@ from app.dto.recomendacion_dto import (
     EstadoRecomendacion
 )
 
+from app.dto.orden_reposicion_dto import (
+    OrdenReposicionCreate,
+    OrigenOrden
+)
+
+from app.dto.detalle_reposicion_dto import (
+    DetalleReposicionCreate
+)
+
 from app.repositories.recomendacion_repository import (
     RecomendacionRepository
+)
+
+from app.services.orden_reposicion_service import (
+    OrdenReposicionService
+)
+
+from app.services.detalle_reposicion_service import (
+    DetalleReposicionService
+)
+
+from app.services.notification_service import (
+    NotificationService
 )
 
 
 class RecomendacionService:
 
     def __init__(self):
+
         self.repository = (
             RecomendacionRepository()
         )
+
+        self.orden_reposicion_service = (
+            OrdenReposicionService()
+        )
+
+        self.detalle_reposicion_service = (
+            DetalleReposicionService()
+        )
+
+        self.notification_service = NotificationService()
+
+    # ========================================================
+    # CREAR RECOMENDACION
+    # ========================================================
 
     async def crear(
         self,
@@ -137,6 +173,10 @@ class RecomendacionService:
             )
         )
 
+    # ========================================================
+    # OBTENER
+    # ========================================================
+
     async def obtener(
         self,
         id_recomendacion: str
@@ -149,6 +189,7 @@ class RecomendacionService:
         )
 
         if recomendacion is None:
+
             raise HTTPException(
                 status_code=404,
                 detail=(
@@ -159,7 +200,12 @@ class RecomendacionService:
 
         return recomendacion
 
+    # ========================================================
+    # LISTAR
+    # ========================================================
+
     async def listar(self):
+
         return (
             await self.repository.listar()
         )
@@ -168,6 +214,7 @@ class RecomendacionService:
         self,
         id_empresa: str
     ):
+
         return (
             await self.repository
             .listar_por_empresa(
@@ -179,6 +226,7 @@ class RecomendacionService:
         self,
         id_almacen: str
     ):
+
         return (
             await self.repository
             .listar_por_almacen(
@@ -190,6 +238,7 @@ class RecomendacionService:
         self,
         id_producto: str
     ):
+
         return (
             await self.repository
             .listar_por_producto(
@@ -201,6 +250,7 @@ class RecomendacionService:
         self,
         id_inventario: str
     ):
+
         return (
             await self.repository
             .listar_por_inventario(
@@ -208,15 +258,47 @@ class RecomendacionService:
             )
         )
 
+    # ========================================================
+    # CAMBIAR ESTADO
+    # ========================================================
+
     async def cambiar_estado(
         self,
         id_recomendacion: str,
         data: RecomendacionEstadoUpdate
     ) -> dict:
 
-        await self.obtener(
+        recomendacion = await self.obtener(
             id_recomendacion
         )
+
+        estado_actual = recomendacion["estado"]
+
+        transiciones_validas = {
+            EstadoRecomendacion.PENDIENTE.value: {
+                EstadoRecomendacion.VALIDADA_OPERARIO.value,
+                EstadoRecomendacion.RECHAZADA.value,
+            },
+            EstadoRecomendacion.VALIDADA_OPERARIO.value: {
+                EstadoRecomendacion.APROBADA_EMPRESA.value,
+                EstadoRecomendacion.RECHAZADA.value,
+            },
+            EstadoRecomendacion.APROBADA_EMPRESA.value: {
+                EstadoRecomendacion.APLICADA.value,
+            },
+        }
+
+        if data.estado.value not in transiciones_validas.get(
+            estado_actual,
+            set()
+        ):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"No se puede cambiar una recomendación "
+                    f"{estado_actual} a {data.estado.value}"
+                )
+            )
 
         ahora = datetime.now(
             timezone.utc
@@ -234,13 +316,316 @@ class RecomendacionService:
             data.estado
             == EstadoRecomendacion.APLICADA
         ):
+
             datos[
                 "fecha_aplicacion"
             ] = ahora
 
-        return (
-            await self.repository.actualizar(
+        resultado = await self.repository.actualizar(
+            id_recomendacion,
+            datos
+        )
+
+        if data.estado == EstadoRecomendacion.VALIDADA_OPERARIO:
+            try:
+                notificacion = await (
+                    self.notification_service.notify_owner(
+                        recomendacion["id_empresa"],
+                        "Aprobación pendiente de reposición",
+                        (
+                            f"Producto: {recomendacion['id_producto']}\n"
+                            f"Stock de referencia: {recomendacion.get('cantidad_minima')}\n"
+                            f"Riesgo: {recomendacion['nivel_riesgo']}\n"
+                            f"Cantidad recomendada: {recomendacion.get('cantidad_recomendada')}\n"
+                            f"Explicación: {recomendacion['explicacion']}\n"
+                            "La recomendación fue validada por un operario y requiere aprobación."
+                        )
+                    )
+                )
+            except Exception as exc:
+                notificacion = {
+                    "status": "PENDIENTE",
+                    "reason": str(exc)
+                }
+
+            resultado = await self.repository.actualizar(
                 id_recomendacion,
-                datos
+                {
+                    "notificacion_aprobacion": notificacion
+                }
+            )
+
+        return resultado
+
+    # ========================================================
+    # CREAR ORDEN DESDE RECOMENDACION IA
+    # ========================================================
+
+    async def crear_orden_desde_recomendacion(
+        self,
+        id_recomendacion: str,
+        id_proveedor: str,
+        costo_unitario: float,
+        fecha_estimada_recepcion=None
+    ) -> dict:
+
+        # ----------------------------------------------------
+        # 1. OBTENER RECOMENDACION
+        # ----------------------------------------------------
+
+        recomendacion = (
+            await self.obtener(
+                id_recomendacion
             )
         )
+
+        # ----------------------------------------------------
+        # 2. VALIDAR ESTADO
+        # ----------------------------------------------------
+
+        if (
+            recomendacion.get("estado")
+            != EstadoRecomendacion.APROBADA_EMPRESA.value
+        ):
+
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "La recomendación debe estar aprobada "
+                    "por la empresa antes de generar la orden"
+                )
+            )
+
+        # ----------------------------------------------------
+        # 3. VALIDAR TIPO
+        # ----------------------------------------------------
+
+        if (
+            recomendacion.get(
+                "tipo_recomendacion"
+            )
+            != "REABASTECER"
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Solo una recomendación de "
+                    "REABASTECER puede generar "
+                    "una orden de reposición"
+                )
+            )
+
+        # ----------------------------------------------------
+        # 4. DATOS NECESARIOS
+        # ----------------------------------------------------
+
+        id_empresa = (
+            recomendacion.get(
+                "id_empresa"
+            )
+        )
+
+        id_almacen = (
+            recomendacion.get(
+                "id_almacen"
+            )
+        )
+
+        id_producto = (
+            recomendacion.get(
+                "id_producto"
+            )
+        )
+
+        cantidad_recomendada = (
+            recomendacion.get(
+                "cantidad_recomendada"
+            )
+        )
+
+        if not id_empresa:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La recomendación no tiene "
+                    "id_empresa"
+                )
+            )
+
+        if not id_almacen:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La recomendación no tiene "
+                    "id_almacen"
+                )
+            )
+
+        if not id_producto:
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La recomendación no tiene "
+                    "id_producto"
+                )
+            )
+
+        if (
+            cantidad_recomendada is None
+            or cantidad_recomendada <= 0
+        ):
+
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "La recomendación no contiene "
+                    "una cantidad de reposición válida"
+                )
+            )
+
+        # ----------------------------------------------------
+        # 5. CREAR ORDEN PENDIENTE
+        # ----------------------------------------------------
+
+        orden_data = OrdenReposicionCreate(
+
+            id_empresa=
+                id_empresa,
+
+            id_almacen=
+                id_almacen,
+
+            id_proveedor=
+                id_proveedor,
+
+            fecha_estimada_recepcion=
+                fecha_estimada_recepcion,
+
+            origen=
+                OrigenOrden.RECOMENDACION_IA,
+
+            observacion=(
+                "Orden generada desde la "
+                f"recomendación IA "
+                f"{id_recomendacion}"
+            )
+        )
+
+        orden = (
+            await self.orden_reposicion_service
+            .crear(
+                orden_data
+            )
+        )
+
+        id_orden = (
+            orden.get(
+                "id_orden_reposicion"
+            )
+        )
+
+        if not id_orden:
+
+            raise HTTPException(
+                status_code=500,
+                detail=(
+                    "La orden fue creada pero no "
+                    "se obtuvo id_orden_reposicion"
+                )
+            )
+
+        # ----------------------------------------------------
+        # 6. CREAR DETALLE
+        #
+        # Si falla el detalle, eliminamos la orden
+        # PENDIENTE para no dejar una orden vacía.
+        # ----------------------------------------------------
+
+        try:
+
+            detalle_data = (
+                DetalleReposicionCreate(
+
+                    id_producto=
+                        id_producto,
+
+                    cantidad_solicitada=
+                        int(
+                            cantidad_recomendada
+                        ),
+
+                    costo_unitario=
+                        costo_unitario
+                )
+            )
+
+            detalle = (
+                await self.detalle_reposicion_service
+                .crear(
+                    id_orden,
+                    detalle_data
+                )
+            )
+
+        except Exception:
+
+            try:
+
+                await (
+                    self.orden_reposicion_service
+                    .eliminar(
+                        id_orden
+                    )
+                )
+
+            except Exception:
+                pass
+
+            raise
+
+        # ----------------------------------------------------
+        # 7. MARCAR RECOMENDACION COMO APLICADA
+        # ----------------------------------------------------
+
+        recomendacion_actualizada = (
+            await self.cambiar_estado(
+
+                id_recomendacion=
+                    id_recomendacion,
+
+                data=
+                    RecomendacionEstadoUpdate(
+                        estado=
+                            EstadoRecomendacion.APLICADA
+                    )
+            )
+        )
+
+        # ----------------------------------------------------
+        # 8. RESPONSE
+        # ----------------------------------------------------
+
+        return {
+
+            "mensaje":
+                (
+                    "Orden de reposición creada "
+                    "desde la recomendación IA"
+                ),
+
+            "id_recomendacion":
+                id_recomendacion,
+
+            "recomendacion":
+                recomendacion_actualizada,
+
+            "orden":
+                orden,
+
+            "detalle":
+                detalle
+        }

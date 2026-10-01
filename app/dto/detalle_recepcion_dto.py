@@ -1,4 +1,5 @@
 from datetime import datetime
+from enum import Enum
 from typing import Optional
 
 from pydantic import (
@@ -6,6 +7,13 @@ from pydantic import (
     Field,
     model_validator
 )
+
+
+
+class EstadoRecepcion(str, Enum):
+    CONFORME = "CONFORME"
+    RECHAZADO = "RECHAZADO"
+    EN_EVALUACION = "EN_EVALUACION"
 
 
 class DetalleRecepcionCreate(BaseModel):
@@ -22,6 +30,25 @@ class DetalleRecepcionCreate(BaseModel):
         ge=0
     )
 
+    lote: str = Field(
+        default="SIN_LOTE",
+        min_length=1,
+        max_length=100
+    )
+
+    fecha_vencimiento: datetime | None = None
+
+    temperatura_recepcion: float | None = None
+
+    estado_recepcion: EstadoRecepcion = (
+        EstadoRecepcion.CONFORME
+    )
+
+    comentario_recepcion: Optional[str] = Field(
+        default=None,
+        max_length=1000
+    )
+
     motivo_rechazo: Optional[str] = Field(
         default=None,
         max_length=500
@@ -29,6 +56,13 @@ class DetalleRecepcionCreate(BaseModel):
 
     @model_validator(mode="after")
     def validar_cantidades(self):
+
+        self.lote = self.lote.strip()
+
+        if self.comentario_recepcion is not None:
+            self.comentario_recepcion = (
+                self.comentario_recepcion.strip()
+            )
 
         if (
             self.cantidad_rechazada
@@ -42,9 +76,23 @@ class DetalleRecepcionCreate(BaseModel):
         if (
             self.cantidad_rechazada > 0
             and not self.motivo_rechazo
+            and not self.comentario_recepcion
         ):
             raise ValueError(
-                "Debe indicar el motivo del rechazo"
+                "Debe indicar el motivo u observación del rechazo"
+            )
+
+        if (
+            self.estado_recepcion
+            in {
+                EstadoRecepcion.RECHAZADO,
+                EstadoRecepcion.EN_EVALUACION
+            }
+            and not self.comentario_recepcion
+            and not self.motivo_rechazo
+        ):
+            raise ValueError(
+                "Debe indicar el motivo de la recepción"
             )
 
         return self
@@ -60,8 +108,18 @@ class DetalleRecepcionResponse(BaseModel):
     cantidad_rechazada: int
     cantidad_aceptada: int
 
+    lote: str = "SIN_LOTE"
+    fecha_vencimiento: datetime | None = None
+    temperatura_recepcion: float | None = None
+    estado_recepcion: EstadoRecepcion = (
+        EstadoRecepcion.CONFORME
+    )
+    comentario_recepcion: Optional[str] = None
+
     motivo_rechazo: Optional[str] = None
 
     id_movimiento: Optional[str] = None
+
+    ubicado: bool = True
 
     fecha_creacion: datetime

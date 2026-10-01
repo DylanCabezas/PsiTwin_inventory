@@ -83,6 +83,13 @@ from app.controllers.inventory_risk_controller import (
     router as inventory_risk_router
 )
 
+# NUEVO:
+# Controller temporal para probar el historial
+# de demanda que posteriormente utilizará ML.
+from app.controllers.forecast_controller import (
+    router as forecast_router
+)
+
 
 # ============================================================
 # SETTINGS
@@ -100,9 +107,17 @@ async def lifespan(
     app: FastAPI
 ):
 
+    # --------------------------------------------------------
+    # INICIO DE LA APLICACION
+    # --------------------------------------------------------
+
     await connect_to_mongo()
 
     yield
+
+    # --------------------------------------------------------
+    # CIERRE DE LA APLICACION
+    # --------------------------------------------------------
 
     await close_mongo_connection()
 
@@ -117,14 +132,14 @@ app = FastAPI(
         settings.app_name,
 
     version=
-        "1.1.0",
+        "1.2.0",
 
     description=(
         "API de gestión inteligente de inventario, "
         "almacenes, movimientos, reposición, "
         "recepción de mercadería, alertas, "
-        "recomendaciones y evaluación de riesgo "
-        "para PsiTwin."
+        "recomendaciones, evaluación de riesgo "
+        "y predicción de demanda para PsiTwin."
     ),
 
     lifespan=
@@ -150,9 +165,10 @@ async def root():
             "PsiTwin Inventory API funcionando",
 
         "version":
-            "1.1.0",
+            "1.2.0",
 
         "modulos": [
+
             "Empresa",
             "Almacen",
             "Zona",
@@ -161,14 +177,19 @@ async def root():
             "Inventario",
             "Operario",
             "Movimiento",
+
             "Proveedor",
             "OrdenReposicion",
             "DetalleReposicion",
             "RecepcionMercaderia",
             "DetalleRecepcion",
+
             "Alertas",
             "Recomendaciones",
-            "InventoryRisk"
+
+            "InventoryRisk",
+
+            "Forecast"
         ]
     }
 
@@ -177,6 +198,12 @@ async def root():
 # HEALTH
 #
 # GET /health
+#
+# Comprueba:
+#
+# FastAPI
+# +
+# MongoDB
 # ============================================================
 
 @app.get(
@@ -211,7 +238,7 @@ async def health():
                 settings.mongodb_database,
 
             "version":
-                "1.1.0"
+                "1.2.0"
         }
 
     except Exception as exc:
@@ -231,12 +258,12 @@ async def health():
                 str(exc),
 
             "version":
-                "1.1.0"
+                "1.2.0"
         }
 
 
 # ============================================================
-# ROUTERS
+# ARQUITECTURA GENERAL
 # ============================================================
 #
 # EMPRESA
@@ -247,11 +274,13 @@ async def health():
 #   ↓
 # RACK
 #
+#
 # PRODUCTO
 #   ↓
 # INVENTARIO
 #   ↓
 # MOVIMIENTO
+#
 #
 # PROVEEDOR
 #   ↓
@@ -267,24 +296,28 @@ async def health():
 #   ↓
 # INVENTARIO
 #
-# CAPA DE INTELIGENCIA
 #
-# INVENTARIO
-# +
+# ============================================================
+# CAPA DE INTELIGENCIA
+# ============================================================
+#
 # MOVIMIENTOS
-# +
-# PRODUCTO
-# +
-# LEAD TIME
-#       ↓
+#      ↓
+# DEMAND HISTORY
+#      ↓
+# FEATURE BUILDER
+#      ↓
+# LIGHTGBM
+# D+1 ... D+7
+#      ↓
+# FORECAST
+#      ↓
 # INVENTORY RISK
-#       ↓
+#      ↓
 # ALERTA
-#       ↓
+#      ↓
 # RECOMENDACION
-#       ↓
-# FORECAST ML
-#       ↓
+#      ↓
 # LLM
 #
 # ============================================================
@@ -446,5 +479,33 @@ app.include_router(
 
 app.include_router(
     inventory_risk_router,
+    prefix=settings.api_prefix
+)
+
+
+# ============================================================
+# FORECAST
+#
+# Actualmente:
+#
+# Movimiento
+#     ↓
+# DemandHistory
+#     ↓
+# Serie diaria
+#
+# Posteriormente:
+#
+# Serie diaria
+#     ↓
+# FeatureBuilder
+#     ↓
+# LightGBM
+#     ↓
+# D+1 ... D+7
+# ============================================================
+
+app.include_router(
+    forecast_router,
     prefix=settings.api_prefix
 )

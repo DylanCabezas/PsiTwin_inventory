@@ -7,6 +7,10 @@ from app.dto.detalle_recepcion_dto import (
     DetalleRecepcionResponse
 )
 
+from app.dto.recepcion_mercaderia_dto import (
+    ResolverEvaluacion
+)
+
 from app.services.detalle_recepcion_service import (
     DetalleRecepcionService
 )
@@ -53,4 +57,18 @@ async def obtener_por_recepcion(
 async def obtener_por_id(id_detalle: str):
     return await service.obtener_por_id(
         id_detalle
+    )
+
+
+@router.post(
+    "/detalles-recepcion/{id_detalle}/resolver",
+    response_model=DetalleRecepcionResponse
+)
+async def resolver_evaluacion(
+    id_detalle: str,
+    data: ResolverEvaluacion
+):
+    return await service.resolver_evaluacion(
+        id_detalle,
+        data
     )

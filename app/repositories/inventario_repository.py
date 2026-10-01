@@ -250,6 +250,28 @@ class InventarioRepository:
             id_inventario
         )
 
+    async def actualizar_stock_condicional(
+        self,
+        id_inventario: str,
+        stock_anterior: int,
+        nuevo_stock: int
+    ) -> bool:
+        resultado = await self.collection().update_one(
+            {
+                "id_inventario": id_inventario,
+                "stock_actual": stock_anterior
+            },
+            {
+                "$set": {
+                    "stock_actual": nuevo_stock,
+                    "fecha_actualizacion": datetime.now(
+                        timezone.utc
+                    )
+                }
+            }
+        )
+        return resultado.matched_count == 1
+
 
     # ============================================================
     # ELIMINAR

@@ -1,69 +1,11 @@
 from datetime import datetime
-from enum import Enum
+from pydantic import BaseModel, Field, model_validator
 
-from pydantic import (
-    BaseModel,
-    Field,
-    model_validator
+from app.dto.detalle_recepcion_dto import (
+    DetalleRecepcionCreate,
+    DetalleRecepcionResponse,
+    EstadoRecepcion
 )
-
-
-class EstadoRecepcion(str, Enum):
-    CONFORME = "CONFORME"
-    RECHAZADO = "RECHAZADO"
-    EN_EVALUACION = "EN_EVALUACION"
-
-
-class DetalleRecepcionCreate(BaseModel):
-
-    id_detalle_reposicion: str
-
-    cantidad_recibida: int = Field(
-        gt=0
-    )
-
-    lote: str = Field(
-        min_length=1,
-        max_length=100
-    )
-
-    fecha_vencimiento: datetime | None = None
-
-    temperatura_recepcion: float | None = None
-
-    estado_recepcion: EstadoRecepcion
-
-    comentario_recepcion: str | None = Field(
-        default=None,
-        max_length=1000
-    )
-
-    @model_validator(mode="after")
-    def validar(self):
-
-        self.lote = self.lote.strip()
-
-        if self.comentario_recepcion is not None:
-            self.comentario_recepcion = (
-                self.comentario_recepcion.strip()
-            )
-
-        if (
-            self.estado_recepcion
-            in {
-                EstadoRecepcion.RECHAZADO,
-                EstadoRecepcion.EN_EVALUACION
-            }
-            and
-            not self.comentario_recepcion
-        ):
-            raise ValueError(
-                "Debe indicar el motivo cuando "
-                "la mercadería es RECHAZADA "
-                "o queda EN_EVALUACION"
-            )
-
-        return self
 
 
 class RecepcionMercaderiaCreate(BaseModel):
@@ -81,40 +23,7 @@ class RecepcionMercaderiaCreate(BaseModel):
 
     detalles: list[
         DetalleRecepcionCreate
-    ] = Field(
-        min_length=1
-    )
-
-
-class DetalleRecepcionResponse(BaseModel):
-
-    id_detalle_recepcion: str
-
-    id_recepcion: str
-
-    id_detalle_reposicion: str
-
-    cantidad_recibida: int
-
-    lote: str
-
-    fecha_vencimiento: datetime | None
-
-    temperatura_recepcion: float | None
-
-    estado_recepcion: EstadoRecepcion
-
-    comentario_recepcion: str | None
-
-    ubicado: bool
-
-    id_inventario: str | None
-
-    fecha_resolucion: datetime | None = None
-
-    id_operario_resolucion: str | None = None
-
-    comentario_resolucion: str | None = None
+    ] = Field(min_length=1)
 
 
 class RecepcionMercaderiaResponse(BaseModel):
@@ -151,6 +60,18 @@ class ResolverEvaluacion(BaseModel):
         min_length=1,
         max_length=1000
     )
+
+    cantidad_aceptada: int | None = Field(
+        default=None,
+        ge=0
+    )
+
+    cantidad_rechazada: int | None = Field(
+        default=None,
+        ge=0
+    )
+
+    id_inventario: str | None = None
 
     @model_validator(mode="after")
     def validar_estado(self):

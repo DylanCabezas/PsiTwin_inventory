@@ -132,6 +132,8 @@ class ProductoService:
             data.model_dump()
         )
 
+        producto.pop("stock", None)
+
 
         # --------------------------------------------------------
         # LIMPIAR TEXTOS
@@ -385,6 +387,8 @@ class ProductoService:
                 exclude_unset=True
             )
         )
+
+        update_data.pop("stock", None)
 
 
         # --------------------------------------------------------

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 class OperarioCreate(BaseModel):
     id_empresa: str
+    id_almacen: Optional[str] = None
 
     nombre: str = Field(
         ...,

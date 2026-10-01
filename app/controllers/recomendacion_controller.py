@@ -1,17 +1,47 @@
-from typing import List
+from datetime import datetime
+from typing import List, Optional
 
 from fastapi import APIRouter
+
+from pydantic import (
+    BaseModel,
+    Field
+)
 
 from app.dto.recomendacion_dto import (
     RecomendacionCreate,
     RecomendacionResponse,
-    RecomendacionEstadoUpdate
+    RecomendacionEstadoUpdate,
+    EstadoRecomendacion
 )
 
 from app.services.recomendacion_service import (
     RecomendacionService
 )
 
+
+# ============================================================
+# REQUEST PARA CONVERTIR RECOMENDACION EN ORDEN
+# ============================================================
+
+class CrearOrdenDesdeRecomendacionRequest(
+    BaseModel
+):
+
+    id_proveedor: str
+
+    costo_unitario: float = Field(
+        ge=0
+    )
+
+    fecha_estimada_recepcion: Optional[
+        datetime
+    ] = None
+
+
+# ============================================================
+# ROUTER
+# ============================================================
 
 router = APIRouter(
     prefix="/recomendaciones",
@@ -21,6 +51,10 @@ router = APIRouter(
 service = RecomendacionService()
 
 
+# ============================================================
+# CREAR RECOMENDACION
+# ============================================================
+
 @router.post(
     "",
     response_model=RecomendacionResponse,
@@ -29,10 +63,15 @@ service = RecomendacionService()
 async def crear_recomendacion(
     data: RecomendacionCreate
 ):
+
     return await service.crear(
         data
     )
 
+
+# ============================================================
+# LISTAR
+# ============================================================
 
 @router.get(
     "",
@@ -41,8 +80,13 @@ async def crear_recomendacion(
     ]
 )
 async def listar_recomendaciones():
+
     return await service.listar()
 
+
+# ============================================================
+# POR EMPRESA
+# ============================================================
 
 @router.get(
     "/empresa/{id_empresa}",
@@ -53,10 +97,15 @@ async def listar_recomendaciones():
 async def listar_recomendaciones_empresa(
     id_empresa: str
 ):
+
     return await service.listar_por_empresa(
         id_empresa
     )
 
+
+# ============================================================
+# POR ALMACEN
+# ============================================================
 
 @router.get(
     "/almacen/{id_almacen}",
@@ -67,10 +116,15 @@ async def listar_recomendaciones_empresa(
 async def listar_recomendaciones_almacen(
     id_almacen: str
 ):
+
     return await service.listar_por_almacen(
         id_almacen
     )
 
+
+# ============================================================
+# POR PRODUCTO
+# ============================================================
 
 @router.get(
     "/producto/{id_producto}",
@@ -81,10 +135,15 @@ async def listar_recomendaciones_almacen(
 async def listar_recomendaciones_producto(
     id_producto: str
 ):
+
     return await service.listar_por_producto(
         id_producto
     )
 
+
+# ============================================================
+# POR INVENTARIO
+# ============================================================
 
 @router.get(
     "/inventario/{id_inventario}",
@@ -95,10 +154,50 @@ async def listar_recomendaciones_producto(
 async def listar_recomendaciones_inventario(
     id_inventario: str
 ):
+
     return await service.listar_por_inventario(
         id_inventario
     )
 
+
+# ============================================================
+# CREAR ORDEN DESDE RECOMENDACION
+#
+# IMPORTANTE:
+# Debe estar antes de /{id_recomendacion}
+# ============================================================
+
+@router.post(
+    "/{id_recomendacion}/crear-orden",
+    status_code=201
+)
+async def crear_orden_desde_recomendacion(
+    id_recomendacion: str,
+    data: CrearOrdenDesdeRecomendacionRequest
+):
+
+    return (
+        await service
+        .crear_orden_desde_recomendacion(
+
+            id_recomendacion=
+                id_recomendacion,
+
+            id_proveedor=
+                data.id_proveedor,
+
+            costo_unitario=
+                data.costo_unitario,
+
+            fecha_estimada_recepcion=
+                data.fecha_estimada_recepcion
+        )
+    )
+
+
+# ============================================================
+# OBTENER RECOMENDACION
+# ============================================================
 
 @router.get(
     "/{id_recomendacion}",
@@ -107,10 +206,15 @@ async def listar_recomendaciones_inventario(
 async def obtener_recomendacion(
     id_recomendacion: str
 ):
+
     return await service.obtener(
         id_recomendacion
     )
 
+
+# ============================================================
+# CAMBIAR ESTADO
+# ============================================================
 
 @router.patch(
     "/{id_recomendacion}/estado",
@@ -120,7 +224,38 @@ async def cambiar_estado_recomendacion(
     id_recomendacion: str,
     data: RecomendacionEstadoUpdate
 ):
+
     return await service.cambiar_estado(
         id_recomendacion,
         data
+    )
+
+
+@router.patch(
+    "/{id_recomendacion}/validar-operario",
+    response_model=RecomendacionResponse
+)
+async def validar_por_operario(
+    id_recomendacion: str
+):
+    return await service.cambiar_estado(
+        id_recomendacion,
+        RecomendacionEstadoUpdate(
+            estado=EstadoRecomendacion.VALIDADA_OPERARIO
+        )
+    )
+
+
+@router.patch(
+    "/{id_recomendacion}/aprobar-empresa",
+    response_model=RecomendacionResponse
+)
+async def aprobar_por_empresa(
+    id_recomendacion: str
+):
+    return await service.cambiar_estado(
+        id_recomendacion,
+        RecomendacionEstadoUpdate(
+            estado=EstadoRecomendacion.APROBADA_EMPRESA
+        )
     )

@@ -148,6 +148,23 @@ class RackRepository:
             length=None
         )
 
+    @staticmethod
+    async def obtener_por_codigo_nivel_y_zona(
+        codigo: str,
+        nivel: int,
+        id_zona: str
+    ) -> Optional[Dict[str, Any]]:
+        return await RackRepository.collection().find_one(
+            {
+                "codigo": codigo,
+                "nivel": nivel,
+                "id_zona": id_zona
+            },
+            {
+                "_id": 0
+            }
+        )
+
 
     # ============================================================
     # ACTUALIZAR

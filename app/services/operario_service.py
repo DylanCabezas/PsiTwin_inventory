@@ -13,6 +13,10 @@ from app.repositories.empresa_repository import (
     EmpresaRepository
 )
 
+from app.repositories.almacen_repository import (
+    AlmacenRepository
+)
+
 
 class OperarioService:
 
@@ -40,6 +44,19 @@ class OperarioService:
                 detail=
                     "Empresa no encontrada"
             )
+
+        if data.id_almacen:
+            almacen = await AlmacenRepository.obtener_por_id(
+                data.id_almacen
+            )
+            if not almacen or almacen.get("id_empresa") != data.id_empresa:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        "El almacén del operario no pertenece "
+                        "a la empresa"
+                    )
+                )
 
 
         operario_data = (

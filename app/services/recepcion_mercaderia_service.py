@@ -18,6 +18,14 @@ from app.repositories.detalle_reposicion_repository import (
     DetalleReposicionRepository
 )
 
+from app.repositories.detalle_recepcion_repository import (
+    DetalleRecepcionRepository
+)
+
+from app.services.detalle_recepcion_service import (
+    DetalleRecepcionService
+)
+
 
 class RecepcionMercaderiaService:
 
@@ -25,6 +33,12 @@ class RecepcionMercaderiaService:
         self.repository = RecepcionMercaderiaRepository()
         self.orden_repository = OrdenReposicionRepository()
         self.detalle_repository = DetalleReposicionRepository()
+        self.detalle_recepcion_repository = (
+            DetalleRecepcionRepository()
+        )
+        self.detalle_recepcion_service = (
+            DetalleRecepcionService()
+        )
 
     async def crear(
         self,
@@ -97,12 +111,28 @@ class RecepcionMercaderiaService:
                 )
             )
 
-        return await self.repository.crear(
+        recepcion = await self.repository.crear(
             data.model_dump()
         )
 
+        for detalle in data.detalles:
+            await self.detalle_recepcion_service.crear(
+                recepcion["id_recepcion"],
+                detalle
+            )
+
+        recepcion["detalles"] = await (
+            self.detalle_recepcion_repository
+            .obtener_por_recepcion(
+                recepcion["id_recepcion"]
+            )
+        )
+
+        return recepcion
+
     async def obtener_todos(self):
-        return await self.repository.obtener_todos()
+        recepciones = await self.repository.obtener_todos()
+        return await self._incluir_detalles(recepciones)
 
     async def obtener_por_id(self, id_recepcion):
 
@@ -116,14 +146,30 @@ class RecepcionMercaderiaService:
                 detail="Recepción no encontrada"
             )
 
+        recepcion["detalles"] = await (
+            self.detalle_recepcion_repository
+            .obtener_por_recepcion(id_recepcion)
+        )
         return recepcion
 
     async def obtener_por_orden(self, id_orden):
-        return await self.repository.obtener_por_orden(
+        recepciones = await self.repository.obtener_por_orden(
             id_orden
         )
+        return await self._incluir_detalles(recepciones)
 
     async def obtener_por_operario(self, id_operario):
-        return await self.repository.obtener_por_operario(
+        recepciones = await self.repository.obtener_por_operario(
             id_operario
         )
+        return await self._incluir_detalles(recepciones)
+
+    async def _incluir_detalles(self, recepciones):
+        for recepcion in recepciones:
+            recepcion["detalles"] = await (
+                self.detalle_recepcion_repository
+                .obtener_por_recepcion(
+                    recepcion["id_recepcion"]
+                )
+            )
+        return recepciones

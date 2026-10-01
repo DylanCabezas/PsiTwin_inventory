@@ -82,3 +82,34 @@ class DetalleRecepcionRepository:
         return await self.obtener_por_id(
             id_detalle_recepcion
         )
+
+    async def actualizar(
+        self,
+        id_detalle_recepcion,
+        cambios
+    ):
+        await self.collection().update_one(
+            {
+                "id_detalle_recepcion":
+                    id_detalle_recepcion
+            },
+            {
+                "$set": cambios
+            }
+        )
+
+        return await self.obtener_por_id(
+            id_detalle_recepcion
+        )
+
+    async def eliminar(
+        self,
+        id_detalle_recepcion
+    ):
+        resultado = await self.collection().delete_one(
+            {
+                "id_detalle_recepcion":
+                    id_detalle_recepcion
+            }
+        )
+        return resultado.deleted_count > 0

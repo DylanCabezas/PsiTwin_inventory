@@ -109,6 +109,16 @@ class MovimientoService:
         data: MovimientoCreate
     ):
 
+        if data.id_detalle_recepcion:
+            existente = await (
+                self.repository
+                .obtener_por_detalle_recepcion(
+                    data.id_detalle_recepcion
+                )
+            )
+            if existente:
+                return existente
+
         # ----------------------------------------------------
         # 1. Validar inventario
         # ----------------------------------------------------
@@ -260,10 +270,23 @@ class MovimientoService:
         # 10. Actualizar inventario
         # ----------------------------------------------------
 
-        await self.inventario_repository.actualizar_stock(
-            data.id_inventario,
-            stock_nuevo
+        actualizado = await (
+            self.inventario_repository
+            .actualizar_stock_condicional(
+                data.id_inventario,
+                stock_anterior,
+                stock_nuevo
+            )
         )
+
+        if not actualizado:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "El inventario cambió durante el movimiento; "
+                    "intente nuevamente"
+                )
+            )
 
         # ----------------------------------------------------
         # 11. Crear historial
@@ -281,6 +304,9 @@ class MovimientoService:
 
             "id_operario":
                 data.id_operario,
+
+            "id_detalle_recepcion":
+                data.id_detalle_recepcion,
 
             "tipo_movimiento":
                 data.tipo_movimiento.value,
@@ -301,11 +327,22 @@ class MovimientoService:
                 data.observacion
         }
 
-        movimiento = (
-            await self.repository.crear(
-                movimiento_dict
+        try:
+            movimiento = (
+                await self.repository.crear(
+                    movimiento_dict
+                )
             )
-        )
+        except Exception:
+            await (
+                self.inventario_repository
+                .actualizar_stock_condicional(
+                    data.id_inventario,
+                    stock_nuevo,
+                    stock_anterior
+                )
+            )
+            raise
 
         return movimiento
 

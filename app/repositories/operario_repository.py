@@ -28,6 +28,7 @@ class OperarioRepository:
         operario = {
             "id_operario": str(uuid4()),
             "id_empresa": data["id_empresa"],
+            "id_almacen": data.get("id_almacen"),
 
             "nombre": data["nombre"],
             "apellido": data["apellido"],

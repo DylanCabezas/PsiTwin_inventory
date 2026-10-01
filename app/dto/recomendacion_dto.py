@@ -18,6 +18,8 @@ class TipoRecomendacion(str, Enum):
 
 class EstadoRecomendacion(str, Enum):
     PENDIENTE = "PENDIENTE"
+    VALIDADA_OPERARIO = "VALIDADA_OPERARIO"
+    APROBADA_EMPRESA = "APROBADA_EMPRESA"
     ACEPTADA = "ACEPTADA"
     RECHAZADA = "RECHAZADA"
     APLICADA = "APLICADA"

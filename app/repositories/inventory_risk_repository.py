@@ -1,5 +1,11 @@
+# app/repositories/inventory_risk_repository.py
+
 from datetime import datetime
-from typing import List, Optional
+
+from typing import (
+    List,
+    Optional
+)
 
 from app.database.mongodb import (
     get_database
@@ -8,123 +14,277 @@ from app.database.mongodb import (
 
 class InventoryRiskRepository:
 
-    def __init__(self):
+    # ============================================================
+    # NOMBRES DE COLECCIONES
+    # ============================================================
 
-        self.db = get_database()
+    INVENTARIOS_COLLECTION = "inventarios"
+    PRODUCTOS_COLLECTION = "productos"
+    MOVIMIENTOS_COLLECTION = "movimientos"
+    RACKS_COLLECTION = "racks"
+    ZONAS_COLLECTION = "zonas"
+    ALMACENES_COLLECTION = "almacenes"
 
-        self.inventarios = self.db[
-            "inventarios"
+
+    # ============================================================
+    # DATABASE
+    #
+    # IMPORTANTE:
+    #
+    # No usamos:
+    #
+    # def __init__(self):
+    #     self.db = get_database()
+    #
+    # porque InventoryRiskService se instancia durante la
+    # importación de los controllers.
+    #
+    # En ese momento FastAPI todavía no ejecutó lifespan()
+    # y MongoDB aún no fue conectado.
+    #
+    # Por eso obtenemos la base de datos solamente cuando
+    # realmente se ejecuta una operación.
+    # ============================================================
+
+    def database(self):
+
+        return get_database()
+
+
+    # ============================================================
+    # COLLECTIONS
+    # ============================================================
+
+    def inventarios_collection(self):
+
+        return self.database()[
+            self.INVENTARIOS_COLLECTION
         ]
 
-        self.productos = self.db[
-            "productos"
+
+    def productos_collection(self):
+
+        return self.database()[
+            self.PRODUCTOS_COLLECTION
         ]
 
-        self.movimientos = self.db[
-            "movimientos"
+
+    def movimientos_collection(self):
+
+        return self.database()[
+            self.MOVIMIENTOS_COLLECTION
         ]
 
-        self.racks = self.db[
-            "racks"
+
+    def racks_collection(self):
+
+        return self.database()[
+            self.RACKS_COLLECTION
         ]
 
-        self.zonas = self.db[
-            "zonas"
+
+    def zonas_collection(self):
+
+        return self.database()[
+            self.ZONAS_COLLECTION
         ]
 
-        self.almacenes = self.db[
-            "almacenes"
+
+    def almacenes_collection(self):
+
+        return self.database()[
+            self.ALMACENES_COLLECTION
         ]
+
+
+    # ============================================================
+    # OBTENER INVENTARIO
+    # ============================================================
 
     async def obtener_inventario(
         self,
         id_inventario: str
     ) -> Optional[dict]:
 
-        return await self.inventarios.find_one(
-            {
-                "id_inventario":
-                    id_inventario
-            },
-            {
-                "_id": 0
-            }
+        return await (
+            self.inventarios_collection()
+            .find_one(
+                {
+                    "$or": [
+                        {
+                            "id_inventario":
+                                id_inventario
+                        },
+                        {
+                            "id":
+                                id_inventario
+                        }
+                    ]
+                },
+                {
+                    "_id": 0
+                }
+            )
         )
+
+
+    # ============================================================
+    # LISTAR INVENTARIOS
+    # ============================================================
 
     async def listar_inventarios(
         self
     ) -> List[dict]:
 
-        cursor = self.inventarios.find(
-            {},
-            {
-                "_id": 0
-            }
+        cursor = (
+            self.inventarios_collection()
+            .find(
+                {},
+                {
+                    "_id": 0
+                }
+            )
         )
 
         return await cursor.to_list(
             length=None
         )
 
+
+    # ============================================================
+    # OBTENER PRODUCTO
+    # ============================================================
+
     async def obtener_producto(
         self,
         id_producto: str
     ) -> Optional[dict]:
 
-        return await self.productos.find_one(
-            {
-                "id_producto":
-                    id_producto
-            },
-            {
-                "_id": 0
-            }
+        return await (
+            self.productos_collection()
+            .find_one(
+                {
+                    "$or": [
+                        {
+                            "id_producto":
+                                id_producto
+                        },
+                        {
+                            "id":
+                                id_producto
+                        }
+                    ]
+                },
+                {
+                    "_id": 0
+                }
+            )
         )
+
+
+    # ============================================================
+    # OBTENER RACK
+    # ============================================================
 
     async def obtener_rack(
         self,
         id_rack: str
     ) -> Optional[dict]:
 
-        return await self.racks.find_one(
-            {
-                "id_rack":
-                    id_rack
-            },
-            {
-                "_id": 0
-            }
+        return await (
+            self.racks_collection()
+            .find_one(
+                {
+                    "$or": [
+                        {
+                            "id_rack":
+                                id_rack
+                        },
+                        {
+                            "id":
+                                id_rack
+                        }
+                    ]
+                },
+                {
+                    "_id": 0
+                }
+            )
         )
+
+
+    # ============================================================
+    # OBTENER ZONA
+    # ============================================================
 
     async def obtener_zona(
         self,
         id_zona: str
     ) -> Optional[dict]:
 
-        return await self.zonas.find_one(
-            {
-                "id_zona":
-                    id_zona
-            },
-            {
-                "_id": 0
-            }
+        return await (
+            self.zonas_collection()
+            .find_one(
+                {
+                    "$or": [
+                        {
+                            "id_zona":
+                                id_zona
+                        },
+                        {
+                            "id":
+                                id_zona
+                        }
+                    ]
+                },
+                {
+                    "_id": 0
+                }
+            )
         )
+
+
+    # ============================================================
+    # OBTENER ALMACEN
+    # ============================================================
 
     async def obtener_almacen(
         self,
         id_almacen: str
     ) -> Optional[dict]:
 
-        return await self.almacenes.find_one(
-            {
-                "id_almacen":
-                    id_almacen
-            },
-            {
-                "_id": 0
-            }
+        return await (
+            self.almacenes_collection()
+            .find_one(
+                {
+                    "$or": [
+                        {
+                            "id_almacen":
+                                id_almacen
+                        },
+                        {
+                            "id":
+                                id_almacen
+                        }
+                    ]
+                },
+                {
+                    "_id": 0
+                }
+            )
         )
+
+
+    # ============================================================
+    # OBTENER SALIDAS DESDE UNA FECHA
+    #
+    # Utilizado por InventoryRiskService para calcular:
+    #
+    # - consumo reciente
+    # - demanda promedio
+    # - cobertura
+    # - riesgo de quiebre
+    # ============================================================
 
     async def obtener_salidas_desde(
         self,
@@ -132,25 +292,29 @@ class InventoryRiskRepository:
         fecha_desde: datetime
     ) -> List[dict]:
 
-        cursor = self.movimientos.find(
-            {
-                "id_inventario":
-                    id_inventario,
+        cursor = (
+            self.movimientos_collection()
+            .find(
+                {
+                    "id_inventario":
+                        id_inventario,
 
-                "tipo_movimiento":
-                    "SALIDA",
+                    "tipo_movimiento":
+                        "SALIDA",
 
-                "fecha_hora": {
-                    "$gte":
-                        fecha_desde
+                    "fecha_hora": {
+                        "$gte":
+                            fecha_desde
+                    }
+                },
+                {
+                    "_id": 0
                 }
-            },
-            {
-                "_id": 0
-            }
-        ).sort(
-            "fecha_hora",
-            1
+            )
+            .sort(
+                "fecha_hora",
+                1
+            )
         )
 
         return await cursor.to_list(

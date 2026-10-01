@@ -49,6 +49,23 @@ async def connect_to_mongo():
             "ping"
         )
 
+        try:
+            await database["movimientos"].create_index(
+                [("id_detalle_recepcion", 1)],
+                unique=True,
+                partialFilterExpression={
+                    "id_detalle_recepcion": {
+                        "$type": "string"
+                    }
+                },
+                name="uq_movimiento_detalle_recepcion"
+            )
+        except Exception as exc:
+            print(
+                "Advertencia creando índice de idempotencia:"
+            )
+            print(exc)
+
         print(
             "MongoDB conectado correctamente"
         )
