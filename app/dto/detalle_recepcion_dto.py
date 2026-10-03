@@ -122,4 +122,8 @@ class DetalleRecepcionResponse(BaseModel):
 
     ubicado: bool = True
 
+    riesgo_antes: Optional[str] = None
+    riesgo_despues: Optional[str] = None
+    notificacion_final: Optional[dict] = None
+
     fecha_creacion: datetime

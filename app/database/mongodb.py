@@ -66,6 +66,18 @@ async def connect_to_mongo():
             )
             print(exc)
 
+        try:
+            await database["notificaciones_email"].create_index(
+                [("event_id", 1)],
+                unique=True,
+                name="uq_notificacion_email_evento"
+            )
+        except Exception as exc:
+            print(
+                "Advertencia creando índice de notificaciones:"
+            )
+            print(exc)
+
         print(
             "MongoDB conectado correctamente"
         )

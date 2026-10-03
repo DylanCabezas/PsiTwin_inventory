@@ -86,6 +86,15 @@ class OrdenReposicionRepository:
 
         return await cursor.to_list(length=None)
 
+    async def obtener_por_recomendacion(
+        self,
+        id_recomendacion: str,
+    ):
+        return await self.collection().find_one(
+            {"id_recomendacion": id_recomendacion},
+            {"_id": 0},
+        )
+
     async def obtener_por_estado(
         self,
         estado: str

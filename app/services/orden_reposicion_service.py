@@ -18,12 +18,15 @@ from app.repositories.proveedor_repository import (
     ProveedorRepository
 )
 
+from app.services.notification_service import NotificationService
+
 
 class OrdenReposicionService:
 
     def __init__(self):
         self.repository = OrdenReposicionRepository()
         self.proveedor_repository = ProveedorRepository()
+        self.notification_service = NotificationService()
 
     async def crear(
         self,
@@ -174,10 +177,12 @@ class OrdenReposicionService:
                 detail="Solo una orden pendiente puede aprobarse"
             )
 
-        return await self.repository.cambiar_estado(
+        resultado = await self.repository.cambiar_estado(
             id_orden,
             "APROBADA"
         )
+        await self.notification_service.enviar_orden_proveedor(id_orden)
+        return resultado
 
     async def enviar(self, id_orden: str):
 
@@ -188,6 +193,15 @@ class OrdenReposicionService:
                 status_code=409,
                 detail="Solo una orden aprobada puede enviarse"
             )
+
+        notification = await self.notification_service.enviar_orden_proveedor(
+            id_orden
+        )
+        if notification.get("status") in {
+            "BLOQUEADA_EMAIL_NO_VERIFICADO",
+            "ERROR",
+        }:
+            return orden
 
         return await self.repository.cambiar_estado(
             id_orden,

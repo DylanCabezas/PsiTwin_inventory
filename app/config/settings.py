@@ -40,6 +40,18 @@ class Settings(BaseSettings):
 
     access_token_expire_minutes: int = 60
 
+    email_enabled: bool = False
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_use_tls: bool = True
+    frontend_url: str | None = None
+    email_verification_ttl_minutes: int = 10
+    email_verification_cooldown_seconds: int = 60
+    email_verification_max_attempts: int = 5
+
 
     # ============================================================
     # ENV

@@ -6,7 +6,11 @@ from fastapi import HTTPException
 from app.dto.recomendacion_dto import (
     RecomendacionCreate,
     RecomendacionEstadoUpdate,
-    EstadoRecomendacion
+    EstadoRecomendacion,
+    EmpresaAprobacionRequest,
+    EmpresaCambiosRequest,
+    EmpresaRechazoRequest,
+    PropuestaRecomendacionUpdate,
 )
 
 from app.dto.orden_reposicion_dto import (
@@ -94,6 +98,9 @@ class RecomendacionService:
                 "cantidad_segura":
                     data.cantidad_segura,
 
+                "forecast_7d":
+                    data.forecast_7d,
+
                 "explicacion":
                     data.explicacion,
 
@@ -146,6 +153,9 @@ class RecomendacionService:
 
             "cantidad_segura":
                 data.cantidad_segura,
+
+            "forecast_7d":
+                data.forecast_7d,
 
             "explicacion":
                 data.explicacion,
@@ -258,6 +268,142 @@ class RecomendacionService:
             )
         )
 
+    async def solicitar_cambios(
+        self,
+        id_recomendacion: str,
+        data: EmpresaCambiosRequest,
+    ) -> dict:
+        recomendacion = await self.obtener(id_recomendacion)
+        if recomendacion.get("id_empresa") != data.id_empresa:
+            raise HTTPException(status_code=403, detail="Empresa no autorizada")
+        if recomendacion["estado"] not in {
+            EstadoRecomendacion.VALIDADA_OPERARIO.value,
+            EstadoRecomendacion.CAMBIOS_SOLICITADOS.value,
+        }:
+            raise HTTPException(status_code=409, detail="La recomendación no está pendiente de decisión")
+
+        ahora = datetime.now(timezone.utc)
+        return await self.repository.actualizar(
+            id_recomendacion,
+            {
+                "estado": EstadoRecomendacion.CAMBIOS_SOLICITADOS.value,
+                "solicitud_cambios": {
+                    "id_empresa": data.id_empresa,
+                    "comentario": data.comentario.strip(),
+                    "estado_anterior": recomendacion["estado"],
+                    "estado_nuevo": EstadoRecomendacion.CAMBIOS_SOLICITADOS.value,
+                    "fecha": ahora,
+                },
+                "fecha_actualizacion": ahora,
+            },
+        )
+
+    async def rechazar_por_empresa(
+        self,
+        id_recomendacion: str,
+        data: EmpresaRechazoRequest,
+    ) -> dict:
+        recomendacion = await self.obtener(id_recomendacion)
+        if recomendacion.get("id_empresa") != data.id_empresa:
+            raise HTTPException(status_code=403, detail="Empresa no autorizada")
+        if recomendacion["estado"] not in {
+            EstadoRecomendacion.VALIDADA_OPERARIO.value,
+            EstadoRecomendacion.CAMBIOS_SOLICITADOS.value,
+        }:
+            raise HTTPException(status_code=409, detail="La recomendación no está pendiente de decisión")
+
+        ahora = datetime.now(timezone.utc)
+        return await self.repository.actualizar(
+            id_recomendacion,
+            {
+                "estado": EstadoRecomendacion.RECHAZADA.value,
+                "decision_empresa": {
+                    "id_empresa": data.id_empresa,
+                    "decision": EstadoRecomendacion.RECHAZADA.value,
+                    "comentario": data.comentario.strip(),
+                    "estado_anterior": recomendacion["estado"],
+                    "fecha": ahora,
+                },
+                "fecha_actualizacion": ahora,
+            },
+        )
+
+    async def actualizar_propuesta(
+        self,
+        id_recomendacion: str,
+        data: PropuestaRecomendacionUpdate,
+        id_operario: str | None = None,
+    ) -> dict:
+        recomendacion = await self.obtener(id_recomendacion)
+        if recomendacion["estado"] != EstadoRecomendacion.CAMBIOS_SOLICITADOS.value:
+            raise HTTPException(status_code=409, detail="No hay cambios solicitados para esta recomendación")
+
+        cambios = data.model_dump(exclude_unset=True, exclude_none=True)
+        if not cambios:
+            raise HTTPException(status_code=400, detail="Debe indicar al menos un cambio permitido")
+        cambios["fecha_actualizacion"] = datetime.now(timezone.utc)
+        await self.repository.actualizar(id_recomendacion, cambios)
+        return await self.cambiar_estado(
+            id_recomendacion,
+            RecomendacionEstadoUpdate(
+                estado=EstadoRecomendacion.VALIDADA_OPERARIO
+            ),
+            id_operario,
+        )
+
+    async def aprobar_por_empresa(
+        self,
+        id_recomendacion: str,
+        data: EmpresaAprobacionRequest,
+    ) -> dict:
+        recomendacion = await self.obtener(id_recomendacion)
+        if recomendacion.get("id_empresa") != data.id_empresa:
+            raise HTTPException(status_code=403, detail="Empresa no autorizada")
+        if recomendacion["estado"] != EstadoRecomendacion.VALIDADA_OPERARIO.value:
+            raise HTTPException(status_code=409, detail="La recomendación debe estar validada por Operario")
+
+        existing_order = await self.orden_reposicion_service.repository.obtener_por_recomendacion(
+            id_recomendacion
+        )
+        if existing_order:
+            if existing_order.get("estado") == "PENDIENTE":
+                existing_order = await self.orden_reposicion_service.aprobar(
+                    existing_order["id_orden_reposicion"]
+                )
+            return {
+                "recomendacion": recomendacion,
+                "orden": existing_order,
+            }
+
+        ahora = datetime.now(timezone.utc)
+        await self.repository.actualizar(
+            id_recomendacion,
+            {
+                "estado": EstadoRecomendacion.APROBADA_EMPRESA.value,
+                "decision_empresa": {
+                    "id_empresa": data.id_empresa,
+                    "decision": EstadoRecomendacion.APROBADA_EMPRESA.value,
+                    "fecha": ahora,
+                    "id_proveedor": data.id_proveedor,
+                    "costo_unitario": data.costo_unitario,
+                },
+                "fecha_actualizacion": ahora,
+            },
+        )
+
+        result = await self.crear_orden_desde_recomendacion(
+            id_recomendacion,
+            data.id_proveedor,
+            data.costo_unitario,
+            data.fecha_estimada_recepcion,
+            data.observacion,
+        )
+        orden = await self.orden_reposicion_service.aprobar(
+            result["orden"]["id_orden_reposicion"]
+        )
+        result["orden"] = orden
+        return result
+
     # ========================================================
     # CAMBIAR ESTADO
     # ========================================================
@@ -265,7 +411,8 @@ class RecomendacionService:
     async def cambiar_estado(
         self,
         id_recomendacion: str,
-        data: RecomendacionEstadoUpdate
+        data: RecomendacionEstadoUpdate,
+        id_operario: str | None = None
     ) -> dict:
 
         recomendacion = await self.obtener(
@@ -281,6 +428,11 @@ class RecomendacionService:
             },
             EstadoRecomendacion.VALIDADA_OPERARIO.value: {
                 EstadoRecomendacion.APROBADA_EMPRESA.value,
+                EstadoRecomendacion.CAMBIOS_SOLICITADOS.value,
+                EstadoRecomendacion.RECHAZADA.value,
+            },
+            EstadoRecomendacion.CAMBIOS_SOLICITADOS.value: {
+                EstadoRecomendacion.VALIDADA_OPERARIO.value,
                 EstadoRecomendacion.RECHAZADA.value,
             },
             EstadoRecomendacion.APROBADA_EMPRESA.value: {
@@ -329,17 +481,10 @@ class RecomendacionService:
         if data.estado == EstadoRecomendacion.VALIDADA_OPERARIO:
             try:
                 notificacion = await (
-                    self.notification_service.notify_owner(
-                        recomendacion["id_empresa"],
-                        "Aprobación pendiente de reposición",
-                        (
-                            f"Producto: {recomendacion['id_producto']}\n"
-                            f"Stock de referencia: {recomendacion.get('cantidad_minima')}\n"
-                            f"Riesgo: {recomendacion['nivel_riesgo']}\n"
-                            f"Cantidad recomendada: {recomendacion.get('cantidad_recomendada')}\n"
-                            f"Explicación: {recomendacion['explicacion']}\n"
-                            "La recomendación fue validada por un operario y requiere aprobación."
-                        )
+                    self.notification_service
+                    .enviar_solicitud_aprobacion(
+                        id_recomendacion,
+                        id_operario
                     )
                 )
             except Exception as exc:
@@ -366,7 +511,8 @@ class RecomendacionService:
         id_recomendacion: str,
         id_proveedor: str,
         costo_unitario: float,
-        fecha_estimada_recepcion=None
+        fecha_estimada_recepcion=None,
+        observacion: str | None = None,
     ) -> dict:
 
         # ----------------------------------------------------
@@ -493,6 +639,9 @@ class RecomendacionService:
 
         orden_data = OrdenReposicionCreate(
 
+            id_recomendacion=
+                id_recomendacion,
+
             id_empresa=
                 id_empresa,
 
@@ -508,7 +657,7 @@ class RecomendacionService:
             origen=
                 OrigenOrden.RECOMENDACION_IA,
 
-            observacion=(
+            observacion=observacion or (
                 "Orden generada desde la "
                 f"recomendación IA "
                 f"{id_recomendacion}"

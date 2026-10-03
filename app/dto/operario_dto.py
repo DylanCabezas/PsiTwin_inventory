@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class OperarioCreate(BaseModel):
@@ -19,6 +19,8 @@ class OperarioCreate(BaseModel):
         min_length=2,
         max_length=100
     )
+
+    correo: EmailStr
 
     cargo: str = Field(
         ...,
@@ -52,6 +54,8 @@ class OperarioUpdate(BaseModel):
         max_length=100
     )
 
+    correo: Optional[EmailStr] = None
+
     cargo: Optional[str] = Field(
         default=None,
         min_length=2,
@@ -77,10 +81,13 @@ class OperarioResponse(BaseModel):
 
     nombre: str
     apellido: str
+    correo: Optional[EmailStr] = None
     cargo: str
     turno: str
     estado: str
     id_almacen: Optional[str] = None
+    correo_verificado: bool = False
+    fecha_verificacion_correo: Optional[datetime] = None
 
     fecha_creacion: datetime
     fecha_actualizacion: datetime

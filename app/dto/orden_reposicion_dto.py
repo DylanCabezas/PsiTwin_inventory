@@ -20,6 +20,7 @@ class OrigenOrden(str, Enum):
 
 
 class OrdenReposicionCreate(BaseModel):
+    id_recomendacion: Optional[str] = None
     id_empresa: str
     id_almacen: str
     id_proveedor: str
@@ -44,6 +45,7 @@ class OrdenReposicionUpdate(BaseModel):
 
 class OrdenReposicionResponse(BaseModel):
     id_orden_reposicion: str
+    id_recomendacion: Optional[str] = None
 
     id_empresa: str
     id_almacen: str

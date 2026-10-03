@@ -602,10 +602,6 @@ class DetalleRecepcionService:
         riesgo_antes,
         riesgo_despues
     ):
-        orden = await self.orden_repository.obtener_por_id(
-            recepcion["id_orden_reposicion"]
-        )
-
         antes = (
             riesgo_antes.riesgo.nivel.value
             if riesgo_antes else "NO_DISPONIBLE"
@@ -614,27 +610,12 @@ class DetalleRecepcionService:
             riesgo_despues.riesgo.nivel.value
             if riesgo_despues else "NO_DISPONIBLE"
         )
-        observacion = (
-            detalle.get("comentario_resolucion")
-            or detalle.get("comentario_recepcion")
-            or detalle.get("motivo_rechazo")
-            or "Sin observaciones"
-        )
-
-        notificacion = await self.notification_service.notify_owner(
-            (orden or {}).get("id_empresa", ""),
-            "Reposición completada",
-            (
-                f"Orden: {(orden or {}).get('id_orden_reposicion')}\n"
-                f"Producto: {detalle.get('id_detalle_reposicion')}\n"
-                f"Solicitado: {detalle.get('cantidad_solicitada', 'N/D')}\n"
-                f"Recibido: {detalle.get('cantidad_recibida')}\n"
-                f"Aceptado: {detalle.get('cantidad_aceptada')}\n"
-                f"Rechazado: {detalle.get('cantidad_rechazada')}\n"
-                f"Rack: {detalle.get('id_rack')}\n"
-                f"Riesgo antes: {antes}\n"
-                f"Riesgo después: {despues}\n"
-                f"Observaciones: {observacion}"
+        notificacion = await (
+            self.notification_service
+            .enviar_resumen_reposicion(
+                detalle["id_detalle_recepcion"],
+                antes,
+                despues
             )
         )
 

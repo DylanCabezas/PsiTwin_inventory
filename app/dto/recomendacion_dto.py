@@ -19,6 +19,7 @@ class TipoRecomendacion(str, Enum):
 class EstadoRecomendacion(str, Enum):
     PENDIENTE = "PENDIENTE"
     VALIDADA_OPERARIO = "VALIDADA_OPERARIO"
+    CAMBIOS_SOLICITADOS = "CAMBIOS_SOLICITADOS"
     APROBADA_EMPRESA = "APROBADA_EMPRESA"
     ACEPTADA = "ACEPTADA"
     RECHAZADA = "RECHAZADA"
@@ -55,6 +56,11 @@ class RecomendacionCreate(BaseModel):
         ge=0
     )
 
+    forecast_7d: Optional[float] = Field(
+        default=None,
+        ge=0
+    )
+
     explicacion: str = Field(
         min_length=3,
         max_length=3000
@@ -86,6 +92,7 @@ class RecomendacionResponse(BaseModel):
     cantidad_minima: Optional[int] = None
     cantidad_recomendada: Optional[int] = None
     cantidad_segura: Optional[int] = None
+    forecast_7d: Optional[float] = None
 
     explicacion: str
     origen: str
@@ -96,8 +103,32 @@ class RecomendacionResponse(BaseModel):
     fecha_actualizacion: datetime
     fecha_aplicacion: Optional[datetime] = None
 
+    notificacion_aprobacion: Optional[dict] = None
+
 
 class RecomendacionEstadoUpdate(
     BaseModel
 ):
     estado: EstadoRecomendacion
+
+
+class EmpresaCambiosRequest(BaseModel):
+    id_empresa: str
+    comentario: str = Field(..., min_length=1, max_length=1000)
+
+
+class EmpresaRechazoRequest(EmpresaCambiosRequest):
+    pass
+
+
+class EmpresaAprobacionRequest(BaseModel):
+    id_empresa: str
+    id_proveedor: str
+    costo_unitario: float = Field(..., ge=0)
+    fecha_estimada_recepcion: Optional[datetime] = None
+    observacion: Optional[str] = Field(default=None, max_length=500)
+
+
+class PropuestaRecomendacionUpdate(BaseModel):
+    cantidad_recomendada: Optional[int] = Field(default=None, ge=1)
+    explicacion: Optional[str] = Field(default=None, min_length=3, max_length=3000)

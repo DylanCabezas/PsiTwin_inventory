@@ -295,6 +295,12 @@ async def register_empresa(
         "correo":
             correo,
 
+        "correo_verificado":
+            False,
+
+        "fecha_verificacion_correo":
+            None,
+
         "telefono":
             data.telefono.strip(),
 
@@ -510,6 +516,10 @@ async def update_empresa_profile(
                     "El correo ya está registrado"
                 )
             )
+
+        if current.get("correo") and current.get("correo").lower() != correo:
+            update_data["correo_verificado"] = False
+            update_data["fecha_verificacion_correo"] = None
 
         update_data[
             "correo"

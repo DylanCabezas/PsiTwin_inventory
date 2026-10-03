@@ -19,10 +19,16 @@ from app.dto.empresa_dto import (
     EmpresaLoginResponse,
     MessageResponse
 )
+from app.dto.email_verification_dto import (
+    EmailVerificationCodeRequest,
+    EmailVerificationResponse,
+    EmailVerificationSendResponse,
+)
 
 from app.services import (
     empresa_service
 )
+from app.services.email_verification_service import EmailVerificationService
 
 
 router = APIRouter(
@@ -39,6 +45,8 @@ router = APIRouter(
 bearer_scheme = HTTPBearer(
     auto_error=True
 )
+
+email_verification_service = EmailVerificationService()
 
 
 async def get_current_empresa_id(
@@ -237,4 +245,32 @@ async def delete_my_empresa(
             id_empresa,
             data
         )
+    )
+
+
+@router.post(
+    "/empresas/{id_empresa}/correo/enviar-verificacion",
+    response_model=EmailVerificationSendResponse,
+    summary="Enviar verificación de correo de empresa",
+)
+async def send_empresa_email_verification(id_empresa: str):
+    return await email_verification_service.request_entity_verification(
+        "empresa",
+        id_empresa,
+    )
+
+
+@router.post(
+    "/empresas/{id_empresa}/correo/verificar",
+    response_model=EmailVerificationResponse,
+    summary="Verificar correo de empresa",
+)
+async def verify_empresa_email(
+    id_empresa: str,
+    data: EmailVerificationCodeRequest,
+):
+    return await email_verification_service.verify_entity_code(
+        "empresa",
+        id_empresa,
+        data.codigo,
     )

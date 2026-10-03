@@ -12,7 +12,11 @@ from app.dto.recomendacion_dto import (
     RecomendacionCreate,
     RecomendacionResponse,
     RecomendacionEstadoUpdate,
-    EstadoRecomendacion
+        EstadoRecomendacion,
+        EmpresaAprobacionRequest,
+        EmpresaCambiosRequest,
+        EmpresaRechazoRequest,
+        PropuestaRecomendacionUpdate,
 )
 
 from app.services.recomendacion_service import (
@@ -236,26 +240,64 @@ async def cambiar_estado_recomendacion(
     response_model=RecomendacionResponse
 )
 async def validar_por_operario(
-    id_recomendacion: str
+    id_recomendacion: str,
+    id_operario: str | None = None
 ):
     return await service.cambiar_estado(
         id_recomendacion,
         RecomendacionEstadoUpdate(
             estado=EstadoRecomendacion.VALIDADA_OPERARIO
-        )
+        ),
+        id_operario
     )
 
 
 @router.patch(
     "/{id_recomendacion}/aprobar-empresa",
-    response_model=RecomendacionResponse
 )
 async def aprobar_por_empresa(
-    id_recomendacion: str
+    id_recomendacion: str,
+    data: EmpresaAprobacionRequest,
 ):
-    return await service.cambiar_estado(
+    return await service.aprobar_por_empresa(
         id_recomendacion,
-        RecomendacionEstadoUpdate(
-            estado=EstadoRecomendacion.APROBADA_EMPRESA
-        )
+        data,
+    )
+
+
+@router.patch(
+    "/{id_recomendacion}/solicitar-cambios",
+    response_model=RecomendacionResponse,
+)
+async def solicitar_cambios(
+    id_recomendacion: str,
+    data: EmpresaCambiosRequest,
+):
+    return await service.solicitar_cambios(id_recomendacion, data)
+
+
+@router.patch(
+    "/{id_recomendacion}/rechazar-empresa",
+    response_model=RecomendacionResponse,
+)
+async def rechazar_por_empresa(
+    id_recomendacion: str,
+    data: EmpresaRechazoRequest,
+):
+    return await service.rechazar_por_empresa(id_recomendacion, data)
+
+
+@router.patch(
+    "/{id_recomendacion}/actualizar-propuesta",
+    response_model=RecomendacionResponse,
+)
+async def actualizar_propuesta(
+    id_recomendacion: str,
+    data: PropuestaRecomendacionUpdate,
+    id_operario: str | None = None,
+):
+    return await service.actualizar_propuesta(
+        id_recomendacion,
+        data,
+        id_operario,
     )

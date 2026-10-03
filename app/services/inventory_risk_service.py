@@ -1673,6 +1673,11 @@ class InventoryRiskService:
                     .reposicion
                     .cantidad_segura,
 
+                forecast_7d=
+                    resultado
+                    .forecast
+                    .demanda_7d,
+
                 explicacion=
                     resultado.explicacion,
 

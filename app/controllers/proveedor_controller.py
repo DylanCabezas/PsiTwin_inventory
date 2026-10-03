@@ -8,10 +8,16 @@ from app.dto.proveedor_dto import (
     ProveedorResponse,
     EstadoProveedor
 )
+from app.dto.email_verification_dto import (
+    EmailVerificationCodeRequest,
+    EmailVerificationResponse,
+    EmailVerificationSendResponse,
+)
 
 from app.services.proveedor_service import (
     ProveedorService
 )
+from app.services.email_verification_service import EmailVerificationService
 
 
 router = APIRouter(
@@ -20,6 +26,7 @@ router = APIRouter(
 )
 
 service = ProveedorService()
+email_verification_service = EmailVerificationService()
 
 
 @router.post(
@@ -84,3 +91,31 @@ async def actualizar(
 @router.delete("/{id_proveedor}")
 async def eliminar(id_proveedor: str):
     return await service.eliminar(id_proveedor)
+
+
+@router.post(
+    "/{id_proveedor}/correo/enviar-verificacion",
+    response_model=EmailVerificationSendResponse,
+    summary="Enviar verificación de correo de proveedor",
+)
+async def send_proveedor_email_verification(id_proveedor: str):
+    return await email_verification_service.request_entity_verification(
+        "proveedor",
+        id_proveedor,
+    )
+
+
+@router.post(
+    "/{id_proveedor}/correo/verificar",
+    response_model=EmailVerificationResponse,
+    summary="Verificar correo de proveedor",
+)
+async def verify_proveedor_email(
+    id_proveedor: str,
+    data: EmailVerificationCodeRequest,
+):
+    return await email_verification_service.verify_entity_code(
+        "proveedor",
+        id_proveedor,
+        data.codigo,
+    )

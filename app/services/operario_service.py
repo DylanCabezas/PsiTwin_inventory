@@ -63,6 +63,12 @@ class OperarioService:
             data.model_dump()
         )
 
+        operario_data["correo"] = (
+            str(operario_data["correo"]).strip().lower()
+        )
+        operario_data["correo_verificado"] = False
+        operario_data["fecha_verificacion_correo"] = None
+
         operario_data[
             "nombre"
         ] = (
@@ -269,6 +275,12 @@ class OperarioService:
         if not update_data:
             return operario
 
+
+        if "correo" in update_data and update_data["correo"] is not None:
+            update_data["correo"] = str(update_data["correo"]).strip().lower()
+            if operario.get("correo") and operario.get("correo").lower() != update_data["correo"]:
+                update_data["correo_verificado"] = False
+                update_data["fecha_verificacion_correo"] = None
 
         if (
             "nombre"

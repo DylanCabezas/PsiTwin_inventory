@@ -43,7 +43,10 @@ class ProveedorService:
 
         documento = data.model_dump()
 
+        documento["correo"] = str(documento.get("correo") or "").strip().lower() if documento.get("correo") else None
         documento["estado"] = data.estado.value
+        documento["correo_verificado"] = False
+        documento["fecha_verificacion_correo"] = None
 
         return await self.repository.crear(documento)
 
@@ -82,11 +85,17 @@ class ProveedorService:
         data: ProveedorUpdate
     ):
 
-        await self.obtener_por_id(id_proveedor)
+        proveedor = await self.obtener_por_id(id_proveedor)
 
         cambios = data.model_dump(
             exclude_unset=True
         )
+
+        if "correo" in cambios and cambios["correo"] is not None:
+            cambios["correo"] = str(cambios["correo"]).strip().lower()
+            if proveedor.get("correo") and proveedor.get("correo").lower() != cambios["correo"]:
+                cambios["correo_verificado"] = False
+                cambios["fecha_verificacion_correo"] = None
 
         if "estado" in cambios:
             cambios["estado"] = cambios["estado"].value

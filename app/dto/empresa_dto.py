@@ -146,6 +146,10 @@ class EmpresaResponse(BaseModel):
 
     telefono: str
 
+    correo_verificado: bool = False
+
+    fecha_verificacion_correo: Optional[str] = None
+
     fecha_creacion: str
 
     fecha_actualizacion: str

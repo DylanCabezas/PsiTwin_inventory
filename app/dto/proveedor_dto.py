@@ -80,6 +80,8 @@ class ProveedorResponse(BaseModel):
     ruc: str
 
     correo: Optional[EmailStr] = None
+    correo_verificado: bool = False
+    fecha_verificacion_correo: Optional[datetime] = None
     telefono: Optional[str] = None
     direccion: Optional[str] = None
 
