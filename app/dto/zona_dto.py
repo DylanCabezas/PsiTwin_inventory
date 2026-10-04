@@ -28,10 +28,15 @@ class ZonaCreate(BaseModel):
         max_length=100
     )
 
+    # Lo decide la empresa al crear la zona.
+    # Solo los racks de zonas refrigeradas tienen temperatura.
+    refrigerada: bool = False
+
     temperatura_min: Optional[float] = None
 
     temperatura_max: Optional[float] = None
 
+    # Cantidad de niveles (un rack por nivel).
     capacidad: int = Field(
         ...,
         ge=0
@@ -55,6 +60,8 @@ class ZonaUpdate(BaseModel):
         min_length=2,
         max_length=100
     )
+
+    refrigerada: Optional[bool] = None
 
     temperatura_min: Optional[float] = None
 
@@ -95,6 +102,9 @@ class ZonaResponse(BaseModel):
     nombre: str
 
     tipo_zona: str
+
+    # Documentos antiguos sin el campo -> False
+    refrigerada: bool = False
 
     temperatura_min: Optional[float] = None
 

@@ -2,6 +2,10 @@ from fastapi import HTTPException
 
 from app.database.mongodb import get_database
 
+from app.dto.auth_dto import (
+    UsuarioActual
+)
+
 from app.dto.recepcion_mercaderia_dto import (
     RecepcionMercaderiaCreate
 )
@@ -22,8 +26,20 @@ from app.repositories.detalle_recepcion_repository import (
     DetalleRecepcionRepository
 )
 
+from app.repositories.rack_repository import (
+    RackRepository
+)
+
+from app.services.acceso_service import (
+    AccesoService
+)
+
 from app.services.detalle_recepcion_service import (
     DetalleRecepcionService
+)
+
+from app.services.rack_service import (
+    RackService
 )
 
 
@@ -42,18 +58,36 @@ class RecepcionMercaderiaService:
 
     async def crear(
         self,
-        data: RecepcionMercaderiaCreate
+        data: RecepcionMercaderiaCreate,
+        user: UsuarioActual
     ):
 
         orden = await self.orden_repository.obtener_por_id(
             data.id_orden_reposicion
         )
 
-        if not orden:
+        if (
+            not orden
+            or orden.get("id_empresa") != user.id_empresa
+        ):
             raise HTTPException(
                 status_code=404,
                 detail="Orden no encontrada"
             )
+
+        # ----------------------------------------------------
+        # Solo OPERARIO, sobre órdenes de su almacén.
+        # id_operario se fuerza al del token.
+        # ----------------------------------------------------
+
+        if orden.get("id_almacen") != user.id_almacen:
+
+            raise HTTPException(
+                status_code=403,
+                detail="La orden no es de su almacén"
+            )
+
+        data.id_operario = user.id_operario
 
         if orden["estado"] not in [
             "ENVIADA",
@@ -81,13 +115,38 @@ class RecepcionMercaderiaService:
                 )
             )
 
+        # Cada detalle debe pertenecer a la orden
+        ids_detalle_orden = {
+            detalle["id_detalle_reposicion"]
+            for detalle in detalles
+        }
+
+        for detalle in data.detalles:
+
+            if (
+                detalle.id_detalle_reposicion
+                not in ids_detalle_orden
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "El detalle de reposición "
+                        f"{detalle.id_detalle_reposicion} "
+                        "no pertenece a la orden"
+                    )
+                )
+
         db = get_database()
 
         operario = await db["operarios"].find_one(
-            {"id_operario": data.id_operario}
+            {"id_operario": data.id_operario},
+            {"_id": 0}
         )
 
-        if not operario:
+        if (
+            not operario
+            or operario.get("id_empresa") != user.id_empresa
+        ):
             raise HTTPException(
                 status_code=404,
                 detail="Operario no encontrado"
@@ -111,6 +170,110 @@ class RecepcionMercaderiaService:
                 )
             )
 
+        # ----------------------------------------------------
+        # PRE-VALIDACION (antes de crear nada)
+        #
+        # - inventario del producto de la línea, dentro
+        #   del almacén del operario
+        # - temperatura obligatoria si el producto es
+        #   refrigerado (422)
+        # - rack DISPONIBLE, con kg libres para todo lo
+        #   aceptado en esta recepción y temperatura
+        #   compatible (409)
+        # ----------------------------------------------------
+
+        detalles_orden = {
+            detalle["id_detalle_reposicion"]: detalle
+            for detalle in detalles
+        }
+
+        racks: dict = {}
+
+        for detalle in data.detalles:
+
+            inventario = await (
+                AccesoService.verificar_inventario(
+                    user,
+                    detalle.id_inventario
+                )
+            )
+
+            producto = await db["productos"].find_one(
+                {
+                    "id_producto":
+                        detalles_orden[
+                            detalle.id_detalle_reposicion
+                        ]["id_producto"]
+                },
+                {"_id": 0}
+            ) or {}
+
+            if (
+                inventario["id_producto"]
+                != producto.get("id_producto")
+            ):
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        "El inventario seleccionado "
+                        "no corresponde al producto "
+                        "de la orden"
+                    )
+                )
+
+            if (
+                producto.get("requiere_refrigeracion")
+                and detalle.temperatura_recepcion is None
+            ):
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "Indique la temperatura de recepción: "
+                        f"{producto.get('nombre')} es refrigerado"
+                    )
+                )
+
+            if detalle.estado_recepcion.value == "EN_EVALUACION":
+                continue
+
+            aceptada = (
+                detalle.cantidad_recibida
+                - detalle.cantidad_rechazada
+            )
+
+            if aceptada <= 0:
+                continue
+
+            id_rack = inventario["id_rack"]
+
+            if id_rack not in racks:
+
+                racks[id_rack] = await (
+                    RackService.enriquecer_uno(
+                        await RackRepository.obtener_por_id(
+                            id_rack
+                        )
+                    )
+                )
+
+            motivo = RackService.motivo_no_cabe(
+                racks[id_rack],
+                producto,
+                aceptada
+            )
+
+            if motivo:
+                raise HTTPException(
+                    status_code=409,
+                    detail=motivo
+                )
+
+            # Descontar para las siguientes líneas del mismo rack
+            racks[id_rack]["libre_kg"] -= (
+                aceptada
+                * float(producto.get("peso") or 0)
+            )
+
         recepcion = await self.repository.crear(
             data.model_dump()
         )
@@ -118,7 +281,8 @@ class RecepcionMercaderiaService:
         for detalle in data.detalles:
             await self.detalle_recepcion_service.crear(
                 recepcion["id_recepcion"],
-                detalle
+                detalle,
+                user
             )
 
         recepcion["detalles"] = await (
@@ -161,6 +325,12 @@ class RecepcionMercaderiaService:
     async def obtener_por_operario(self, id_operario):
         recepciones = await self.repository.obtener_por_operario(
             id_operario
+        )
+        return await self._incluir_detalles(recepciones)
+
+    async def obtener_por_ordenes(self, ids_orden):
+        recepciones = await self.repository.obtener_por_ordenes(
+            ids_orden
         )
         return await self._incluir_detalles(recepciones)
 

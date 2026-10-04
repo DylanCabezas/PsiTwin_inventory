@@ -4,24 +4,51 @@ from datetime import (
     timezone
 )
 
-import jwt
+from typing import (
+    Any,
+    Dict,
+    Optional
+)
 
-from pwdlib import PasswordHash
+import bcrypt
+import jwt
 
 from app.config.settings import (
     settings
 )
 
 
-password_hasher = PasswordHash.recommended()
+# ============================================================
+# ROLES
+# ============================================================
 
+ROL_EMPRESA = "EMPRESA"
+
+ROL_OPERARIO = "OPERARIO"
+
+ROL_PROVEEDOR = "PROVEEDOR"
+
+
+# ============================================================
+# PASSWORD
+#
+# bcrypt: mismo esquema que ya usaban las empresas,
+# ahora compartido con los operarios.
+# ============================================================
 
 def hash_password(
     password: str
 ) -> str:
 
-    return password_hasher.hash(
-        password
+    hashed = bcrypt.hashpw(
+        password.encode(
+            "utf-8"
+        ),
+        bcrypt.gensalt()
+    )
+
+    return hashed.decode(
+        "utf-8"
     )
 
 
@@ -32,9 +59,13 @@ def verify_password(
 
     try:
 
-        return password_hasher.verify(
-            plain_password,
-            hashed_password
+        return bcrypt.checkpw(
+            plain_password.encode(
+                "utf-8"
+            ),
+            hashed_password.encode(
+                "utf-8"
+            )
         )
 
     except Exception:
@@ -42,54 +73,92 @@ def verify_password(
         return False
 
 
+# ============================================================
+# JWT
+#
+# Payload:
+#
+# sub            -> id_empresa o id_operario
+# rol            -> EMPRESA | OPERARIO
+# id_empresa
+# id_almacen     -> solo OPERARIO
+# id_proveedor   -> solo PROVEEDOR
+# type           -> "empresa" | "operario" (compatibilidad)
+# ============================================================
+
 def create_access_token(
-    id_empresa: str
+    sub: str,
+    rol: str = ROL_EMPRESA,
+    id_empresa: Optional[str] = None,
+    id_almacen: Optional[str] = None,
+    id_proveedor: Optional[str] = None
 ) -> str:
 
+    now = datetime.now(
+        timezone.utc
+    )
+
     expiration = (
-        datetime.now(timezone.utc)
-        + timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+        now
+        +
+        timedelta(
+            minutes=(
+                settings
+                .access_token_expire_minutes
+            )
         )
     )
 
-    payload = {
-        "sub": id_empresa,
+    payload: Dict[str, Any] = {
+
+        "sub": sub,
+
+        "rol": rol,
+
+        "type": rol.lower(),
+
+        "id_empresa": (
+            id_empresa
+            or
+            sub
+        ),
+
+        "iat": now,
+
         "exp": expiration
     }
 
+    if rol == ROL_OPERARIO:
+
+        payload[
+            "id_almacen"
+        ] = id_almacen
+
+    if rol == ROL_PROVEEDOR:
+
+        payload[
+            "id_proveedor"
+        ] = id_proveedor
+
     return jwt.encode(
         payload,
-        settings.JWT_SECRET_KEY,
-        algorithm=settings.JWT_ALGORITHM
+        settings.secret_key,
+        algorithm=settings.algorithm
     )
 
 
 def decode_access_token(
     token: str
-) -> str | None:
+) -> Dict[str, Any]:
 
-    try:
+    # Lanza jwt.ExpiredSignatureError /
+    # jwt.InvalidTokenError; quien llama
+    # decide el HTTP status.
 
-        payload = jwt.decode(
-            token,
-            settings.JWT_SECRET_KEY,
-            algorithms=[
-                settings.JWT_ALGORITHM
-            ]
-        )
-
-        id_empresa = payload.get(
-            "sub"
-        )
-
-        if id_empresa is None:
-            return None
-
-        return str(
-            id_empresa
-        )
-
-    except jwt.InvalidTokenError:
-
-        return None
+    return jwt.decode(
+        token,
+        settings.secret_key,
+        algorithms=[
+            settings.algorithm
+        ]
+    )

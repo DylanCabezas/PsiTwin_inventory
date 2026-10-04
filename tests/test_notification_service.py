@@ -378,46 +378,55 @@ class EmailVerificationServiceTests(unittest.TestCase):
 
 
 class OrderNotificationWiringTests(unittest.TestCase):
-    def test_approval_notifies_provider_once(self):
+    # Contrato ROLES.md: validar (alias aprobar / enviar) pasa la
+    # solicitud a ENVIADA; el correo es un aviso que nunca bloquea.
+
+    def _service(self, estado, notificacion):
         from app.services.orden_reposicion_service import OrdenReposicionService
 
         service = OrdenReposicionService()
         service.repository.obtener_por_id = AsyncMock(return_value={
             "id_orden_reposicion": "order-1",
-            "estado": "PENDIENTE",
+            "estado": estado,
         })
         service.repository.cambiar_estado = AsyncMock(return_value={
             "id_orden_reposicion": "order-1",
-            "estado": "APROBADA",
+            "estado": "ENVIADA",
         })
-        service.notification_service.enviar_orden_proveedor = AsyncMock(
-            return_value={"status": "ENVIADO"}
+        service.detalle_repository.obtener_por_orden = AsyncMock(
+            return_value=[{"id_detalle_reposicion": "line-1"}]
+        )
+        service.notification_service.enviar_orden_proveedor = notificacion
+        return service
+
+    def test_approval_sends_order_and_notifies_provider_once(self):
+        service = self._service(
+            "PENDIENTE",
+            AsyncMock(return_value={"status": "ENVIADO"}),
         )
 
         result = asyncio.run(service.aprobar("order-1"))
 
-        self.assertEqual(result["estado"], "APROBADA")
+        self.assertEqual(result["estado"], "ENVIADA")
+        service.repository.cambiar_estado.assert_awaited_once_with(
+            "order-1",
+            "ENVIADA",
+        )
         service.notification_service.enviar_orden_proveedor.assert_awaited_once_with(
             "order-1"
         )
 
-    def test_unverified_provider_keeps_approved_order_retryable(self):
-        from app.services.orden_reposicion_service import OrdenReposicionService
+    def test_unverified_or_failing_email_never_blocks_sending(self):
+        for notificacion in (
+            AsyncMock(return_value={"status": "BLOQUEADA_EMAIL_NO_VERIFICADO"}),
+            AsyncMock(side_effect=RuntimeError("SMTP caído")),
+        ):
+            service = self._service("APROBADA", notificacion)
 
-        service = OrdenReposicionService()
-        service.repository.obtener_por_id = AsyncMock(return_value={
-            "id_orden_reposicion": "order-1",
-            "estado": "APROBADA",
-        })
-        service.repository.cambiar_estado = AsyncMock()
-        service.notification_service.enviar_orden_proveedor = AsyncMock(
-            return_value={"status": "BLOQUEADA_EMAIL_NO_VERIFICADO"}
-        )
+            result = asyncio.run(service.enviar("order-1"))
 
-        result = asyncio.run(service.enviar("order-1"))
-
-        self.assertEqual(result["estado"], "APROBADA")
-        service.repository.cambiar_estado.assert_not_awaited()
+            self.assertEqual(result["estado"], "ENVIADA")
+            service.repository.cambiar_estado.assert_awaited_once()
 
 
 class RecommendationDecisionTests(unittest.TestCase):

@@ -18,7 +18,13 @@ class RecepcionMercaderiaRepository:
         documento = data.copy()
 
         documento["id_recepcion"] = str(uuid4())
-        documento["fecha_recepcion"] = ahora
+
+        # Se respeta la fecha enviada; si no, ahora.
+        documento["fecha_recepcion"] = (
+            data.get("fecha_recepcion")
+            or ahora
+        )
+
         documento["fecha_creacion"] = ahora
 
         await self.collection().insert_one(documento)
@@ -26,6 +32,15 @@ class RecepcionMercaderiaRepository:
         return await self.obtener_por_id(
             documento["id_recepcion"]
         )
+
+    async def obtener_por_ordenes(self, ids_orden):
+
+        cursor = self.collection().find(
+            {"id_orden_reposicion": {"$in": list(ids_orden)}},
+            {"_id": 0}
+        ).sort("fecha_recepcion", -1)
+
+        return await cursor.to_list(length=None)
 
     async def obtener_por_id(self, id_recepcion):
 

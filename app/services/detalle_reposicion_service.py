@@ -38,7 +38,7 @@ class DetalleReposicionService:
                 detail="Orden no encontrada"
             )
 
-        if orden["estado"] != "PENDIENTE":
+        if orden["estado"] not in ("PENDIENTE", "OBSERVADA"):
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -131,7 +131,7 @@ class DetalleReposicionService:
             detalle["id_orden_reposicion"]
         )
 
-        if orden["estado"] != "PENDIENTE":
+        if orden["estado"] not in ("PENDIENTE", "OBSERVADA"):
             raise HTTPException(
                 status_code=409,
                 detail=(
@@ -156,7 +156,7 @@ class DetalleReposicionService:
             detalle["id_orden_reposicion"]
         )
 
-        if orden["estado"] != "PENDIENTE":
+        if orden["estado"] not in ("PENDIENTE", "OBSERVADA"):
             raise HTTPException(
                 status_code=409,
                 detail="El detalle ya no puede eliminarse"

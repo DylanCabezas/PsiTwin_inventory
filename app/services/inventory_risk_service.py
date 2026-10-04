@@ -1692,7 +1692,8 @@ class InventoryRiskService:
 
     async def evaluar_todos(
         self,
-        generar_alertas: bool = False
+        generar_alertas: bool = False,
+        ids_inventario: set | None = None
     ) -> list[
         InventoryRiskResponse
     ]:
@@ -1716,6 +1717,13 @@ class InventoryRiskService:
             )
 
             if not id_inventario:
+                continue
+
+            # Alcance de la empresa (None = todos)
+            if (
+                ids_inventario is not None
+                and id_inventario not in ids_inventario
+            ):
                 continue
 
             resultado = (

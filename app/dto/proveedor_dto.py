@@ -11,7 +11,8 @@ class EstadoProveedor(str, Enum):
 
 
 class ProveedorCreate(BaseModel):
-    id_empresa: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
 
     nombre: str = Field(
         ...,
@@ -43,6 +44,14 @@ class ProveedorCreate(BaseModel):
     )
 
     estado: EstadoProveedor = EstadoProveedor.ACTIVO
+
+    # Cuenta de acceso (rol PROVEEDOR). Requiere correo.
+    # Queda con debe_cambiar_password = true.
+    password_temporal: Optional[str] = Field(
+        default=None,
+        min_length=6,
+        max_length=128
+    )
 
 
 class ProveedorUpdate(BaseModel):
@@ -80,6 +89,8 @@ class ProveedorResponse(BaseModel):
     ruc: str
 
     correo: Optional[EmailStr] = None
+    tiene_cuenta: bool = False
+    debe_cambiar_password: bool = False
     correo_verificado: bool = False
     fecha_verificacion_correo: Optional[datetime] = None
     telefono: Optional[str] = None

@@ -38,12 +38,24 @@ from app.repositories.rack_repository import (
     RackRepository
 )
 
+from app.repositories.producto_repository import (
+    ProductoRepository
+)
+
 from app.repositories.zona_repository import (
     ZonaRepository
 )
 
+from app.dto.auth_dto import (
+    UsuarioActual
+)
+
 from app.services.movimiento_service import (
     MovimientoService
+)
+
+from app.services.rack_service import (
+    RackService
 )
 
 from app.services.notification_service import (
@@ -92,7 +104,8 @@ class DetalleRecepcionService:
     async def crear(
         self,
         id_recepcion: str,
-        data: DetalleRecepcionCreate
+        data: DetalleRecepcionCreate,
+        user: UsuarioActual | None = None
     ):
 
         # ====================================================
@@ -211,6 +224,19 @@ class DetalleRecepcionService:
             )
 
         # ====================================================
+        # 4.1 OPERARIO: SOLO ORDENES DE SU ALMACEN
+        # ====================================================
+
+        if (
+            user is not None
+            and orden.get("id_almacen") != user.id_almacen
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="La orden no es de su almacén"
+            )
+
+        # ====================================================
         # 5. VALIDAR PRODUCTO
         #
         # El inventario seleccionado debe corresponder
@@ -294,6 +320,20 @@ class DetalleRecepcionService:
                     "la cantidad pendiente de la orden. "
                     f"Pendiente: {cantidad_pendiente}"
                 )
+            )
+
+        # ====================================================
+        # 8.1 RACK DISPONIBLE, KG LIBRES Y TEMPERATURA (409)
+        # ====================================================
+
+        if cantidad_aceptada > 0:
+
+            await RackService.validar_asignacion(
+                rack,
+                await ProductoRepository.obtener_por_id(
+                    inventario["id_producto"]
+                ) or {},
+                cantidad_aceptada
             )
 
         # ====================================================
@@ -415,8 +455,20 @@ class DetalleRecepcionService:
     async def resolver_evaluacion(
         self,
         id_detalle_recepcion: str,
-        data
+        data,
+        user: UsuarioActual | None = None
     ):
+
+        # OPERARIO: resuelve siempre a su nombre.
+        if user is not None and user.es_operario:
+            data.id_operario = user.id_operario
+
+        if not data.id_operario:
+            raise HTTPException(
+                status_code=422,
+                detail="Debe indicar id_operario"
+            )
+
         detalle = await self.repository.obtener_por_id(
             id_detalle_recepcion
         )
@@ -540,6 +592,15 @@ class DetalleRecepcionService:
                 riesgo_antes,
                 riesgo_despues
             )
+
+        # Rack DISPONIBLE, kg libres y temperatura (409)
+        await RackService.validar_asignacion(
+            rack,
+            await ProductoRepository.obtener_por_id(
+                inventario["id_producto"]
+            ) or {},
+            aceptada
+        )
 
         movimiento = await self.movimiento_service.crear_movimiento(
             MovimientoCreate(

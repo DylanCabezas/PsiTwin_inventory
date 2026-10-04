@@ -2,17 +2,34 @@ from typing import List
 
 from fastapi import (
     APIRouter,
+    Depends,
     Query
+)
+
+from app.dependencies.dependencies import (
+    require_empresa
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
 )
 
 from app.dto.inventory_risk_dto import (
     InventoryRiskResponse
 )
 
+from app.services.acceso_service import (
+    AccesoService
+)
+
 from app.services.inventory_risk_service import (
     InventoryRiskService
 )
 
+
+# ============================================================
+# INVENTORY RISK: solo EMPRESA, sobre sus inventarios.
+# ============================================================
 
 router = APIRouter(
     prefix="/inventory-risk",
@@ -33,7 +50,6 @@ service = InventoryRiskService()
     )
 )
 async def evaluar_todos(
-
     generar_alertas: bool = Query(
         default=False,
         description=(
@@ -42,12 +58,19 @@ async def evaluar_todos(
             "para inventarios con riesgo "
             "alto o crítico."
         )
+    ),
+    user: UsuarioActual = Depends(
+        require_empresa
     )
 ):
 
     return await service.evaluar_todos(
         generar_alertas=
-            generar_alertas
+            generar_alertas,
+        ids_inventario=
+            await AccesoService.ids_inventarios(
+                user
+            )
     )
 
 
@@ -59,9 +82,7 @@ async def evaluar_todos(
     )
 )
 async def evaluar_inventario(
-
     id_inventario: str,
-
     generar_alertas: bool = Query(
         default=True,
         description=(
@@ -70,13 +91,20 @@ async def evaluar_inventario(
             "la recomendación cuando existe "
             "riesgo alto o crítico."
         )
+    ),
+    user: UsuarioActual = Depends(
+        require_empresa
     )
 ):
+
+    await AccesoService.verificar_inventario(
+        user,
+        id_inventario
+    )
 
     return await service.evaluar(
         id_inventario=
             id_inventario,
-
         generar_alertas=
             generar_alertas
     )

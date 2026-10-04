@@ -1,12 +1,27 @@
 from fastapi import (
     APIRouter,
+    Depends,
     status
+)
+
+from app.dependencies.dependencies import (
+    require_empresa_u_operario,
+    require_operario
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
 )
 
 from app.dto.inventario_dto import (
     InventarioCreate,
     InventarioUpdate,
-    InventarioResponse
+    InventarioResponse,
+    InventarioHistorialResponse
+)
+
+from app.services.acceso_service import (
+    AccesoService
 )
 
 from app.services.inventario_service import (
@@ -23,8 +38,24 @@ router = APIRouter(
 service = InventarioService()
 
 
+async def _filtrar_alcance(
+    user: UsuarioActual,
+    inventarios: list
+) -> list:
+
+    return AccesoService.filtrar(
+        inventarios,
+        "id_rack",
+        await AccesoService.ids_racks(
+            user
+        )
+    )
+
+
 # =============================================================
-# CREAR INVENTARIO
+# CREAR INVENTARIO (OPERARIO, racks de su almacén)
+#
+# EMPRESA: solo lectura.
 # =============================================================
 
 @router.post(
@@ -33,11 +64,25 @@ service = InventarioService()
     status_code=status.HTTP_201_CREATED
 )
 async def crear_inventario(
-    data: InventarioCreate
+    data: InventarioCreate,
+    user: UsuarioActual = Depends(
+        require_operario
+    )
 ):
 
+    await AccesoService.verificar_rack(
+        user,
+        data.id_rack
+    )
+
+    await AccesoService.verificar_producto(
+        user,
+        data.id_producto
+    )
+
     return await service.crear_inventario(
-        data
+        data,
+        user.id_operario
     )
 
 
@@ -51,10 +96,15 @@ async def crear_inventario(
         InventarioResponse
     ]
 )
-async def obtener_inventarios():
+async def obtener_inventarios(
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
+):
 
-    return await (
-        service.obtener_inventarios()
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_inventarios()
     )
 
 
@@ -68,10 +118,15 @@ async def obtener_inventarios():
         InventarioResponse
     ]
 )
-async def obtener_stock_bajo():
+async def obtener_stock_bajo(
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
+):
 
-    return await (
-        service.obtener_stock_bajo()
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_stock_bajo()
     )
 
 
@@ -85,10 +140,15 @@ async def obtener_stock_bajo():
         InventarioResponse
     ]
 )
-async def obtener_sin_stock():
+async def obtener_sin_stock(
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
+):
 
-    return await (
-        service.obtener_sin_stock()
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_sin_stock()
     )
 
 
@@ -102,10 +162,15 @@ async def obtener_sin_stock():
         InventarioResponse
     ]
 )
-async def obtener_sobre_stock():
+async def obtener_sobre_stock(
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
+):
 
-    return await (
-        service.obtener_sobre_stock()
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_sobre_stock()
     )
 
 
@@ -120,11 +185,20 @@ async def obtener_sobre_stock():
     ]
 )
 async def obtener_inventario_producto(
-    id_producto: str
+    id_producto: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await (
-        service.obtener_por_producto(
+    await AccesoService.verificar_producto(
+        user,
+        id_producto
+    )
+
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_por_producto(
             id_producto
         )
     )
@@ -141,8 +215,16 @@ async def obtener_inventario_producto(
     ]
 )
 async def obtener_inventario_rack(
-    id_rack: str
+    id_rack: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
+
+    await AccesoService.verificar_rack(
+        user,
+        id_rack
+    )
 
     return await (
         service.obtener_por_rack(
@@ -160,18 +242,22 @@ async def obtener_inventario_rack(
     response_model=InventarioResponse
 )
 async def obtener_inventario(
-    id_inventario: str
+    id_inventario: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
     return await (
-        service.obtener_inventario(
+        AccesoService.verificar_inventario(
+            user,
             id_inventario
         )
     )
 
 
 # =============================================================
-# ACTUALIZAR
+# ACTUALIZAR LIMITES (OPERARIO)
 # =============================================================
 
 @router.put(
@@ -180,19 +266,57 @@ async def obtener_inventario(
 )
 async def actualizar_inventario(
     id_inventario: str,
-    data: InventarioUpdate
+    data: InventarioUpdate,
+    user: UsuarioActual = Depends(
+        require_operario
+    )
 ):
+
+    await AccesoService.verificar_inventario(
+        user,
+        id_inventario
+    )
 
     return await (
         service.actualizar_inventario(
             id_inventario,
-            data
+            data,
+            user.id_operario
         )
     )
 
 
 # =============================================================
-# ELIMINAR
+# HISTORIAL DE CAMBIOS (EMPRESA / OPERARIO)
+# =============================================================
+
+@router.get(
+    "/{id_inventario}/historial",
+    response_model=list[
+        InventarioHistorialResponse
+    ]
+)
+async def obtener_historial(
+    id_inventario: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
+):
+
+    await AccesoService.verificar_inventario(
+        user,
+        id_inventario
+    )
+
+    return await (
+        service.obtener_historial(
+            id_inventario
+        )
+    )
+
+
+# =============================================================
+# ELIMINAR (OPERARIO, sin stock)
 # =============================================================
 
 @router.delete(
@@ -200,8 +324,16 @@ async def actualizar_inventario(
     status_code=status.HTTP_200_OK
 )
 async def eliminar_inventario(
-    id_inventario: str
+    id_inventario: str,
+    user: UsuarioActual = Depends(
+        require_operario
+    )
 ):
+
+    await AccesoService.verificar_inventario(
+        user,
+        id_inventario
+    )
 
     return await (
         service.eliminar_inventario(

@@ -9,6 +9,10 @@ class OperarioRepository:
 
     COLLECTION_NAME = "operarios"
 
+    # IMPORTANTE:
+    # Los documentos devueltos incluyen password_hash.
+    # El service debe sanitizarlos antes de responder.
+
     @staticmethod
     def collection():
         return get_database()[
@@ -35,6 +39,15 @@ class OperarioRepository:
             "cargo": data["cargo"],
             "turno": data["turno"],
             "estado": data["estado"],
+
+            "correo": data.get("correo"),
+            "correo_verificado": data.get("correo_verificado", False),
+            "fecha_verificacion_correo": data.get("fecha_verificacion_correo"),
+            "password_hash": data.get("password_hash"),
+            "debe_cambiar_password": data.get(
+                "debe_cambiar_password",
+                False
+            ),
 
             "fecha_creacion": now,
             "fecha_actualizacion": now
@@ -90,6 +103,81 @@ class OperarioRepository:
                 }
             )
         )
+
+
+    # ============================================================
+    # OBTENER POR CORREO (LOGIN)
+    # ============================================================
+
+    @staticmethod
+    async def obtener_por_correo(
+        correo: str
+    ) -> Optional[Dict[str, Any]]:
+
+        return await (
+            OperarioRepository
+            .collection()
+            .find_one(
+                {
+                    "correo":
+                        correo.lower().strip()
+                },
+                {
+                    "_id": 0
+                }
+            )
+        )
+
+
+    # ============================================================
+    # NOMBRES POR IDS
+    #
+    # {id_operario: "Nombre Apellido"} para historiales.
+    # ============================================================
+
+    @staticmethod
+    async def nombres_por_ids(
+        ids_operario: List[Optional[str]]
+    ) -> Dict[str, str]:
+
+        ids = list(
+            {
+                id_operario
+                for id_operario in ids_operario
+                if id_operario
+            }
+        )
+
+        if not ids:
+            return {}
+
+        cursor = (
+            OperarioRepository
+            .collection()
+            .find(
+                {
+                    "id_operario": {
+                        "$in": ids
+                    }
+                },
+                {
+                    "_id": 0,
+                    "id_operario": 1,
+                    "nombre": 1,
+                    "apellido": 1
+                }
+            )
+        )
+
+        return {
+            operario["id_operario"]: (
+                f"{operario.get('nombre', '')} "
+                f"{operario.get('apellido', '')}"
+            ).strip()
+            for operario in await cursor.to_list(
+                length=None
+            )
+        }
 
 
     @staticmethod
@@ -210,6 +298,32 @@ class OperarioRepository:
             OperarioRepository
             .obtener_por_id(
                 id_operario
+            )
+        )
+
+
+    # ============================================================
+    # ACTUALIZAR PASSWORD
+    # ============================================================
+
+    @staticmethod
+    async def actualizar_password(
+        id_operario: str,
+        password_hash: str,
+        debe_cambiar_password: bool
+    ) -> Optional[Dict[str, Any]]:
+
+        return await (
+            OperarioRepository
+            .actualizar(
+                id_operario,
+                {
+                    "password_hash":
+                        password_hash,
+
+                    "debe_cambiar_password":
+                        debe_cambiar_password
+                }
             )
         )
 

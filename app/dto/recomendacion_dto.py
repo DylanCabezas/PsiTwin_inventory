@@ -28,7 +28,8 @@ class EstadoRecomendacion(str, Enum):
 
 
 class RecomendacionCreate(BaseModel):
-    id_empresa: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
     id_almacen: str
     id_inventario: str
     id_producto: str
@@ -113,7 +114,8 @@ class RecomendacionEstadoUpdate(
 
 
 class EmpresaCambiosRequest(BaseModel):
-    id_empresa: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
     comentario: str = Field(..., min_length=1, max_length=1000)
 
 
@@ -122,7 +124,8 @@ class EmpresaRechazoRequest(EmpresaCambiosRequest):
 
 
 class EmpresaAprobacionRequest(BaseModel):
-    id_empresa: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
     id_proveedor: str
     costo_unitario: float = Field(..., ge=0)
     fecha_estimada_recepcion: Optional[datetime] = None

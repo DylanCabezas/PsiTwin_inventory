@@ -14,6 +14,15 @@ from app.repositories.empresa_repository import (
 )
 
 
+from app.services.cuenta_service import (
+    validar_correo_disponible
+)
+
+from app.utils.security import (
+    hash_password
+)
+
+
 class ProveedorService:
 
     def __init__(self):
@@ -42,6 +51,35 @@ class ProveedorService:
             )
 
         documento = data.model_dump()
+
+        # ----------------------------------------------------
+        # CUENTA DE ACCESO (opcional)
+        # ----------------------------------------------------
+
+        password_temporal = documento.pop(
+            "password_temporal",
+            None
+        )
+
+        if password_temporal:
+
+            if not data.correo:
+                raise HTTPException(
+                    status_code=422,
+                    detail=(
+                        "El correo es obligatorio para "
+                        "crear la cuenta del proveedor"
+                    )
+                )
+
+            await validar_correo_disponible(
+                str(data.correo)
+            )
+
+            documento["password_hash"] = hash_password(
+                password_temporal
+            )
+            documento["debe_cambiar_password"] = True
 
         documento["correo"] = str(documento.get("correo") or "").strip().lower() if documento.get("correo") else None
         documento["estado"] = data.estado.value
@@ -93,12 +131,63 @@ class ProveedorService:
 
         if "correo" in cambios and cambios["correo"] is not None:
             cambios["correo"] = str(cambios["correo"]).strip().lower()
+            if proveedor.get("password_hash"):
+                await validar_correo_disponible(
+                    cambios["correo"],
+                    id_proveedor
+                )
             if proveedor.get("correo") and proveedor.get("correo").lower() != cambios["correo"]:
                 cambios["correo_verificado"] = False
                 cambios["fecha_verificacion_correo"] = None
 
         if "estado" in cambios:
             cambios["estado"] = cambios["estado"].value
+
+        return await self.repository.actualizar(
+            id_proveedor,
+            cambios
+        )
+
+    # ========================================================
+    # RESET PASSWORD (EMPRESA)
+    #
+    # Da o restablece la cuenta del proveedor.
+    # ========================================================
+
+    async def reset_password(
+        self,
+        id_proveedor: str,
+        password_temporal: str,
+        correo: str | None = None
+    ):
+
+        proveedor = await self.obtener_por_id(id_proveedor)
+
+        correo = correo or proveedor.get("correo")
+
+        if not correo:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "El proveedor no tiene correo. "
+                    "Envíe 'correo' en el body"
+                )
+            )
+
+        cambios = {
+            "correo": await validar_correo_disponible(
+                correo,
+                id_proveedor
+            ),
+            "password_hash": hash_password(
+                password_temporal
+            ),
+            "debe_cambiar_password": True
+        }
+
+        if cambios["correo"] != (proveedor.get("correo") or "").lower():
+            cambios["correo_verificado"] = False
+            cambios["fecha_verificacion_correo"] = None
 
         return await self.repository.actualizar(
             id_proveedor,

@@ -86,6 +86,22 @@ class OrdenReposicionRepository:
 
         return await cursor.to_list(length=None)
 
+    async def obtener_por_proveedor_y_estados(
+        self,
+        id_proveedor: str,
+        estados: list
+    ):
+
+        cursor = self.collection().find(
+            {
+                "id_proveedor": id_proveedor,
+                "estado": {"$in": estados}
+            },
+            {"_id": 0}
+        ).sort("fecha_orden", -1)
+
+        return await cursor.to_list(length=None)
+
     async def obtener_por_recomendacion(
         self,
         id_recomendacion: str,

@@ -2,7 +2,20 @@ from typing import List
 
 from fastapi import (
     APIRouter,
+    Depends,
+    HTTPException,
     status
+)
+
+from app.dependencies.dependencies import (
+    get_usuario_activo,
+    require_empresa_u_operario,
+    require_proveedor,
+    require_roles
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
 )
 
 from app.dto.producto_dto import (
@@ -11,9 +24,48 @@ from app.dto.producto_dto import (
     ProductoResponse
 )
 
+from app.repositories.inventario_repository import (
+    InventarioRepository
+)
+
+from app.services.acceso_service import (
+    AccesoService
+)
+
 from app.services.producto_service import (
     ProductoService
 )
+
+
+# ============================================================
+# PRODUCTOS
+#
+# PROVEEDOR -> crea / edita / borra los suyos; ve solo los suyos.
+# OPERARIO  -> lee los de la empresa; edita solo id_rack
+#              (rack de referencia, de su almacén).
+# EMPRESA   -> solo lectura.
+# ============================================================
+
+def _visibles(
+    user: UsuarioActual,
+    productos: list
+) -> list:
+
+    productos = AccesoService.filtrar_empresa(
+        user,
+        productos
+    )
+
+    if user.es_proveedor:
+
+        productos = [
+            producto
+            for producto in productos
+            if producto.get("id_proveedor")
+            == user.id_proveedor
+        ]
+
+    return productos
 
 
 router = APIRouter(
@@ -25,7 +77,10 @@ router = APIRouter(
 
 
 # ============================================================
-# CREAR
+# CREAR (PROVEEDOR)
+#
+# id_proveedor e id_empresa se toman del token.
+# Sin rack: el rack de referencia lo asigna el operario.
 # ============================================================
 
 @router.post(
@@ -37,8 +92,17 @@ router = APIRouter(
     summary="Crear producto"
 )
 async def crear_producto(
-    data: ProductoCreate
+    data: ProductoCreate,
+    user: UsuarioActual = Depends(
+        require_proveedor
+    )
 ):
+
+    data.id_empresa = user.id_empresa
+
+    data.id_proveedor = user.id_proveedor
+
+    data.id_rack = None
 
     return await (
         ProductoService.crear(
@@ -48,7 +112,7 @@ async def crear_producto(
 
 
 # ============================================================
-# OBTENER TODOS
+# OBTENER TODOS (DE LA EMPRESA)
 # ============================================================
 
 @router.get(
@@ -58,11 +122,18 @@ async def crear_producto(
     ],
     summary="Obtener productos"
 )
-async def obtener_productos():
+async def obtener_productos(
+    user: UsuarioActual = Depends(
+        get_usuario_activo
+    )
+):
 
-    return await (
-        ProductoService
-        .obtener_todos()
+    return _visibles(
+        user,
+        await (
+            ProductoService
+            .obtener_todos()
+        )
     )
 
 
@@ -82,11 +153,18 @@ async def obtener_productos():
         "Obtener productos refrigerados"
     )
 )
-async def obtener_productos_refrigerados():
+async def obtener_productos_refrigerados(
+    user: UsuarioActual = Depends(
+        get_usuario_activo
+    )
+):
 
-    return await (
-        ProductoService
-        .obtener_refrigerados()
+    return _visibles(
+        user,
+        await (
+            ProductoService
+            .obtener_refrigerados()
+        )
     )
 
 
@@ -104,8 +182,16 @@ async def obtener_productos_refrigerados():
     )
 )
 async def obtener_productos_por_almacen(
-    id_almacen: str
+    id_almacen: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
+
+    await AccesoService.verificar_almacen(
+        user,
+        id_almacen
+    )
 
     return await (
         ProductoService
@@ -129,8 +215,16 @@ async def obtener_productos_por_almacen(
     )
 )
 async def obtener_productos_por_rack(
-    id_rack: str
+    id_rack: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
+
+    await AccesoService.verificar_rack(
+        user,
+        id_rack
+    )
 
     return await (
         ProductoService
@@ -154,13 +248,19 @@ async def obtener_productos_por_rack(
     )
 )
 async def obtener_productos_por_categoria(
-    categoria: str
+    categoria: str,
+    user: UsuarioActual = Depends(
+        get_usuario_activo
+    )
 ):
 
-    return await (
-        ProductoService
-        .obtener_por_categoria(
-            categoria
+    return _visibles(
+        user,
+        await (
+            ProductoService
+            .obtener_por_categoria(
+                categoria
+            )
         )
     )
 
@@ -177,8 +277,16 @@ async def obtener_productos_por_categoria(
     summary="Obtener producto por ID"
 )
 async def obtener_producto(
-    id_producto: str
+    id_producto: str,
+    user: UsuarioActual = Depends(
+        get_usuario_activo
+    )
 ):
+
+    await AccesoService.verificar_producto(
+        user,
+        id_producto
+    )
 
     return await (
         ProductoService
@@ -190,6 +298,9 @@ async def obtener_producto(
 
 # ============================================================
 # ACTUALIZAR
+#
+# PROVEEDOR: sus productos (id_rack se ignora).
+# OPERARIO : solo id_rack (rack de referencia).
 # ============================================================
 
 @router.put(
@@ -199,8 +310,49 @@ async def obtener_producto(
 )
 async def actualizar_producto(
     id_producto: str,
-    data: ProductoUpdate
+    data: ProductoUpdate,
+    user: UsuarioActual = Depends(
+        require_roles(
+            "PROVEEDOR",
+            "OPERARIO"
+        )
+    )
 ):
+
+    await AccesoService.verificar_producto(
+        user,
+        id_producto
+    )
+
+    if user.es_operario:
+
+        if data.model_fields_set - {"id_rack"}:
+
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "El operario solo puede cambiar "
+                    "el rack de referencia (id_rack)"
+                )
+            )
+
+        if data.id_rack:
+
+            await AccesoService.verificar_rack(
+                user,
+                data.id_rack
+            )
+
+    else:
+
+        # El proveedor no gestiona racks: se conserva
+        # el rack de referencia actual.
+        data = ProductoUpdate(
+            **data.model_dump(
+                exclude_unset=True,
+                exclude={"id_rack"}
+            )
+        )
 
     return await (
         ProductoService.actualizar(
@@ -211,7 +363,7 @@ async def actualizar_producto(
 
 
 # ============================================================
-# ELIMINAR
+# ELIMINAR (PROVEEDOR, los suyos)
 # ============================================================
 
 @router.delete(
@@ -222,8 +374,30 @@ async def actualizar_producto(
     summary="Eliminar producto"
 )
 async def eliminar_producto(
-    id_producto: str
+    id_producto: str,
+    user: UsuarioActual = Depends(
+        require_proveedor
+    )
 ):
+
+    await AccesoService.verificar_producto(
+        user,
+        id_producto
+    )
+
+    # Un producto con inventario no se borra
+    # (dejaría stock huérfano en los racks).
+    if await InventarioRepository().obtener_por_producto(
+        id_producto
+    ):
+
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "El producto tiene inventarios; "
+                "no puede eliminarse"
+            )
+        )
 
     return await (
         ProductoService.eliminar(

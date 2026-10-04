@@ -10,8 +10,15 @@ from pydantic import (
 
 class ProductoCreate(BaseModel):
 
-    id_empresa: str
-    id_rack: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
+
+    # Se ignora: se toma del token del PROVEEDOR.
+    id_proveedor: Optional[str] = None
+
+    # Rack de referencia: lo asigna después el OPERARIO
+    # (PUT /productos/{id} {id_rack}).
+    id_rack: Optional[str] = None
 
     nombre: str = Field(
         ...,
@@ -33,8 +40,9 @@ class ProductoCreate(BaseModel):
 
     marca: Optional[str] = None
 
-    peso: Optional[float] = Field(
-        default=None,
+    # Obligatorio: kg por unidad (carga de los racks).
+    peso: float = Field(
+        ...,
         gt=0
     )
 
@@ -132,7 +140,10 @@ class ProductoResponse(BaseModel):
 
     id_empresa: str
 
-    # Para compatibilidad con registros antiguos
+    # Productos antiguos (creados por la empresa) -> null
+    id_proveedor: Optional[str] = None
+
+    # Rack de referencia (opcional)
     id_rack: Optional[str] = None
 
     nombre: str

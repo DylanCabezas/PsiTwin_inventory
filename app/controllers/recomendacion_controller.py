@@ -1,7 +1,21 @@
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.dependencies.dependencies import (
+    require_empresa,
+    require_empresa_u_operario,
+    require_operario
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
+
+from app.services.acceso_service import (
+    AccesoService
+)
 
 from pydantic import (
     BaseModel,
@@ -56,6 +70,43 @@ service = RecomendacionService()
 
 
 # ============================================================
+# ACCESO
+#
+# EMPRESA  -> recomendaciones de su empresa; decide
+#             (aprobar / solicitar cambios / rechazar).
+# OPERARIO -> lee las de su almacén, valida y
+#             actualiza la propuesta.
+# PROVEEDOR -> sin acceso.
+# ============================================================
+
+async def _verificar(
+    user: UsuarioActual,
+    id_recomendacion: str
+):
+    recomendacion = await service.obtener(
+        id_recomendacion
+    )
+
+    if recomendacion.get("id_empresa") != user.id_empresa:
+        raise HTTPException(
+            status_code=404,
+            detail="Recomendación no encontrada"
+        )
+
+    if (
+        user.es_operario
+        and recomendacion.get("id_almacen")
+        != user.id_almacen
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="No tiene acceso a esta recomendación"
+        )
+
+    return recomendacion
+
+
+# ============================================================
 # CREAR RECOMENDACION
 # ============================================================
 
@@ -65,8 +116,16 @@ service = RecomendacionService()
     status_code=201
 )
 async def crear_recomendacion(
-    data: RecomendacionCreate
+    data: RecomendacionCreate,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+
+    data.id_empresa = user.id_empresa
+
+    await AccesoService.verificar_almacen(
+        user,
+        data.id_almacen
+    )
 
     return await service.crear(
         data
@@ -83,9 +142,22 @@ async def crear_recomendacion(
         RecomendacionResponse
     ]
 )
-async def listar_recomendaciones():
+async def listar_recomendaciones(
+    user: UsuarioActual = Depends(require_empresa_u_operario)
+):
 
-    return await service.listar()
+    if user.es_operario:
+
+        if not user.id_almacen:
+            return []
+
+        return await service.listar_por_almacen(
+            user.id_almacen
+        )
+
+    return await service.listar_por_empresa(
+        user.id_empresa
+    )
 
 
 # ============================================================
@@ -99,8 +171,14 @@ async def listar_recomendaciones():
     ]
 )
 async def listar_recomendaciones_empresa(
-    id_empresa: str
+    id_empresa: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+
+    AccesoService.verificar_empresa(
+        user,
+        id_empresa
+    )
 
     return await service.listar_por_empresa(
         id_empresa
@@ -118,8 +196,14 @@ async def listar_recomendaciones_empresa(
     ]
 )
 async def listar_recomendaciones_almacen(
-    id_almacen: str
+    id_almacen: str,
+    user: UsuarioActual = Depends(require_empresa_u_operario)
 ):
+
+    await AccesoService.verificar_almacen(
+        user,
+        id_almacen
+    )
 
     return await service.listar_por_almacen(
         id_almacen
@@ -137,11 +221,20 @@ async def listar_recomendaciones_almacen(
     ]
 )
 async def listar_recomendaciones_producto(
-    id_producto: str
+    id_producto: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
 
-    return await service.listar_por_producto(
+    await AccesoService.verificar_producto(
+        user,
         id_producto
+    )
+
+    return AccesoService.filtrar_empresa(
+        user,
+        await service.listar_por_producto(
+            id_producto
+        )
     )
 
 
@@ -156,8 +249,14 @@ async def listar_recomendaciones_producto(
     ]
 )
 async def listar_recomendaciones_inventario(
-    id_inventario: str
+    id_inventario: str,
+    user: UsuarioActual = Depends(require_empresa_u_operario)
 ):
+
+    await AccesoService.verificar_inventario(
+        user,
+        id_inventario
+    )
 
     return await service.listar_por_inventario(
         id_inventario
@@ -177,8 +276,16 @@ async def listar_recomendaciones_inventario(
 )
 async def crear_orden_desde_recomendacion(
     id_recomendacion: str,
-    data: CrearOrdenDesdeRecomendacionRequest
+    data: CrearOrdenDesdeRecomendacionRequest,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+
+    await _verificar(user, id_recomendacion)
+
+    await AccesoService.verificar_proveedor(
+        user,
+        data.id_proveedor
+    )
 
     return (
         await service
@@ -208,10 +315,12 @@ async def crear_orden_desde_recomendacion(
     response_model=RecomendacionResponse
 )
 async def obtener_recomendacion(
-    id_recomendacion: str
+    id_recomendacion: str,
+    user: UsuarioActual = Depends(require_empresa_u_operario)
 ):
 
-    return await service.obtener(
+    return await _verificar(
+        user,
         id_recomendacion
     )
 
@@ -226,8 +335,11 @@ async def obtener_recomendacion(
 )
 async def cambiar_estado_recomendacion(
     id_recomendacion: str,
-    data: RecomendacionEstadoUpdate
+    data: RecomendacionEstadoUpdate,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+
+    await _verificar(user, id_recomendacion)
 
     return await service.cambiar_estado(
         id_recomendacion,
@@ -241,8 +353,11 @@ async def cambiar_estado_recomendacion(
 )
 async def validar_por_operario(
     id_recomendacion: str,
-    id_operario: str | None = None
+    user: UsuarioActual = Depends(require_operario)
 ):
+    # id_operario: siempre el del token
+    await _verificar(user, id_recomendacion)
+    id_operario = user.id_operario
     return await service.cambiar_estado(
         id_recomendacion,
         RecomendacionEstadoUpdate(
@@ -258,7 +373,11 @@ async def validar_por_operario(
 async def aprobar_por_empresa(
     id_recomendacion: str,
     data: EmpresaAprobacionRequest,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+    await _verificar(user, id_recomendacion)
+    await AccesoService.verificar_proveedor(user, data.id_proveedor)
+    data.id_empresa = user.id_empresa
     return await service.aprobar_por_empresa(
         id_recomendacion,
         data,
@@ -272,7 +391,10 @@ async def aprobar_por_empresa(
 async def solicitar_cambios(
     id_recomendacion: str,
     data: EmpresaCambiosRequest,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+    await _verificar(user, id_recomendacion)
+    data.id_empresa = user.id_empresa
     return await service.solicitar_cambios(id_recomendacion, data)
 
 
@@ -283,7 +405,10 @@ async def solicitar_cambios(
 async def rechazar_por_empresa(
     id_recomendacion: str,
     data: EmpresaRechazoRequest,
+    user: UsuarioActual = Depends(require_empresa)
 ):
+    await _verificar(user, id_recomendacion)
+    data.id_empresa = user.id_empresa
     return await service.rechazar_por_empresa(id_recomendacion, data)
 
 
@@ -294,8 +419,11 @@ async def rechazar_por_empresa(
 async def actualizar_propuesta(
     id_recomendacion: str,
     data: PropuestaRecomendacionUpdate,
-    id_operario: str | None = None,
+    user: UsuarioActual = Depends(require_operario)
 ):
+    # id_operario: siempre el del token
+    await _verificar(user, id_recomendacion)
+    id_operario = user.id_operario
     return await service.actualizar_propuesta(
         id_recomendacion,
         data,

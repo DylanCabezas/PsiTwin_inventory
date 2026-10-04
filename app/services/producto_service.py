@@ -67,13 +67,16 @@ class ProductoService:
         # VALIDAR RACK
         # --------------------------------------------------------
 
-        rack = await (
-            RackRepository.obtener_por_id(
+        # El rack de referencia es opcional al crear.
+        rack = (
+            await RackRepository.obtener_por_id(
                 data.id_rack
             )
+            if data.id_rack
+            else None
         )
 
-        if not rack:
+        if data.id_rack and not rack:
 
             raise HTTPException(
                 status_code=(

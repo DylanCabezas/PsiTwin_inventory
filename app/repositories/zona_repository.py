@@ -144,6 +144,37 @@ class ZonaRepository:
 
 
     # ============================================================
+    # OBTENER POR VARIOS ALMACENES
+    #
+    # Usado para calcular el alcance (empresa / operario).
+    # ============================================================
+
+    @staticmethod
+    async def obtener_por_almacenes(
+        ids_almacen: List[str]
+    ) -> List[Dict[str, Any]]:
+
+        collection = (
+            ZonaRepository.collection()
+        )
+
+        cursor = collection.find(
+            {
+                "id_almacen": {
+                    "$in": list(ids_almacen)
+                }
+            },
+            {
+                "_id": 0
+            }
+        )
+
+        return await cursor.to_list(
+            length=None
+        )
+
+
+    # ============================================================
     # ACTUALIZAR
     # ============================================================
 

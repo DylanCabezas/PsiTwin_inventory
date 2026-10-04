@@ -1,6 +1,14 @@
 from typing import List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
+
+from app.dependencies.dependencies import (
+    require_empresa
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
 
 from app.dto.alerta_dto import (
     AlertaCreate,
@@ -8,10 +16,18 @@ from app.dto.alerta_dto import (
     AlertaEstadoUpdate
 )
 
+from app.services.acceso_service import (
+    AccesoService
+)
+
 from app.services.alerta_service import (
     AlertaService
 )
 
+
+# ============================================================
+# ALERTAS: solo EMPRESA, filtradas a su empresa.
+# ============================================================
 
 router = APIRouter(
     prefix="/alertas",
@@ -21,130 +37,145 @@ router = APIRouter(
 service = AlertaService()
 
 
+async def _verificar(
+    user: UsuarioActual,
+    id_item: str
+):
+    item = await service.obtener(id_item)
+
+    if item.get("id_empresa") != user.id_empresa:
+        raise HTTPException(
+            status_code=404,
+            detail="Alerta no encontrada"
+        )
+
+    return item
+
+
 @router.post(
     "",
     response_model=AlertaResponse,
     status_code=201
 )
 async def crear_alerta(
-    data: AlertaCreate
+    data: AlertaCreate,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.crear(
-        data
-    )
+    data.id_empresa = user.id_empresa
+    await AccesoService.verificar_almacen(user, data.id_almacen)
+    return await service.crear(data)
 
 
 @router.get(
     "",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas():
-    return await service.listar()
+async def listar(
+    user: UsuarioActual = Depends(require_empresa)
+):
+    return await service.listar_por_empresa(
+        user.id_empresa
+    )
 
 
 @router.get(
     "/activas",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas_activas():
-    return await service.listar_activas()
-
+async def listar_activas(
+    user: UsuarioActual = Depends(require_empresa)
+):
+    return AccesoService.filtrar_empresa(
+        user,
+        await service.listar_activas()
+    )
 
 @router.get(
     "/empresa/{id_empresa}",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas_empresa(
-    id_empresa: str
+async def listar_empresa(
+    id_empresa: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.listar_por_empresa(
-        id_empresa
-    )
+    AccesoService.verificar_empresa(user, id_empresa)
+    return await service.listar_por_empresa(id_empresa)
 
 
 @router.get(
     "/almacen/{id_almacen}",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas_almacen(
-    id_almacen: str
+async def listar_almacen(
+    id_almacen: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.listar_por_almacen(
-        id_almacen
-    )
+    await AccesoService.verificar_almacen(user, id_almacen)
+    return await service.listar_por_almacen(id_almacen)
 
 
 @router.get(
     "/producto/{id_producto}",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas_producto(
-    id_producto: str
+async def listar_producto(
+    id_producto: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.listar_por_producto(
-        id_producto
+    await AccesoService.verificar_producto(user, id_producto)
+    return AccesoService.filtrar_empresa(
+        user,
+        await service.listar_por_producto(id_producto)
     )
 
 
 @router.get(
     "/inventario/{id_inventario}",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas_inventario(
-    id_inventario: str
+async def listar_inventario(
+    id_inventario: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.listar_por_inventario(
-        id_inventario
+    await AccesoService.verificar_inventario(user, id_inventario)
+    return AccesoService.filtrar_empresa(
+        user,
+        await service.listar_por_inventario(id_inventario)
     )
 
 
 @router.get(
     "/nivel/{nivel_riesgo}",
-    response_model=List[
-        AlertaResponse
-    ]
+    response_model=List[AlertaResponse]
 )
-async def listar_alertas_nivel(
-    nivel_riesgo: str
+async def listar_nivel(
+    nivel_riesgo: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.listar_por_nivel(
-        nivel_riesgo
+    return AccesoService.filtrar_empresa(
+        user,
+        await service.listar_por_nivel(nivel_riesgo)
     )
-
 
 @router.get(
-    "/{id_alerta}",
+    "/{id_item}",
     response_model=AlertaResponse
 )
-async def obtener_alerta(
-    id_alerta: str
+async def obtener(
+    id_item: str,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.obtener(
-        id_alerta
-    )
+    return await _verificar(user, id_item)
 
 
 @router.patch(
-    "/{id_alerta}/estado",
+    "/{id_item}/estado",
     response_model=AlertaResponse
 )
-async def cambiar_estado_alerta(
-    id_alerta: str,
-    data: AlertaEstadoUpdate
+async def cambiar_estado(
+    id_item: str,
+    data: AlertaEstadoUpdate,
+    user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.cambiar_estado(
-        id_alerta,
-        data
-    )
+    await _verificar(user, id_item)
+    return await service.cambiar_estado(id_item, data)

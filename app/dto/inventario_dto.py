@@ -52,12 +52,8 @@ class InventarioCreate(BaseModel):
 
 class InventarioUpdate(BaseModel):
 
-    id_rack: Optional[str] = None
-
-    stock_actual: Optional[int] = Field(
-        default=None,
-        ge=0
-    )
+    # Solo límites: el stock cambia únicamente por
+    # movimientos y recepciones; el rack no se cambia.
 
     stock_minimo: Optional[int] = Field(
         default=None,
@@ -91,3 +87,25 @@ class InventarioResponse(BaseModel):
     fecha_creacion: datetime
 
     fecha_actualizacion: datetime
+
+
+# ============================================================
+# HISTORIAL DE CAMBIOS
+#
+# GET /inventarios/{id}/historial
+# ============================================================
+
+class InventarioHistorialResponse(BaseModel):
+
+    fecha: datetime
+
+    id_operario: Optional[str] = None
+
+    operario_nombre: Optional[str] = None
+
+    # CREAR | EDITAR_LIMITES
+    accion: str
+
+    antes: Optional[dict] = None
+
+    despues: Optional[dict] = None

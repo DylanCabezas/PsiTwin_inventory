@@ -2,10 +2,36 @@
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import (
+    Depends,
+    FastAPI,
+    Request
+)
+
+from fastapi.middleware.cors import (
+    CORSMiddleware
+)
+
+from fastapi.responses import (
+    JSONResponse
+)
 
 from app.config.settings import (
     get_settings
+)
+
+from app.dependencies.dependencies import (
+    PasswordChangeRequired,
+    get_usuario_activo,
+    require_empresa
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
+
+from app.services.acceso_service import (
+    AccesoService
 )
 
 from app.database.mongodb import (
@@ -145,6 +171,95 @@ app = FastAPI(
     lifespan=
         lifespan
 )
+
+
+# ============================================================
+# CORS
+#
+# Orígenes configurables: CORS_ORIGINS en .env
+# (separados por comas). Default: http://localhost:5173
+# ============================================================
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=
+        settings.cors_origins_list,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
+
+# ============================================================
+# OPERARIO CON CONTRASEÑA TEMPORAL
+#
+# 403 {"detail": "...", "code": "PASSWORD_CHANGE_REQUIRED"}
+# ============================================================
+
+@app.exception_handler(
+    PasswordChangeRequired
+)
+async def password_change_required_handler(
+    request: Request,
+    exc: PasswordChangeRequired
+):
+
+    return JSONResponse(
+        status_code=403,
+        content={
+            "detail":
+                exc.detail,
+            "code":
+                exc.code
+        }
+    )
+
+
+# ============================================================
+# PROTECCION GLOBAL
+#
+# Todo /api/v1/* exige token salvo auth/login y
+# auth/register (router de empresa, que protege
+# /empresas/me por endpoint). Cada controller aplica
+# además el rol y el aislamiento por empresa.
+#
+# Excepciones al bloqueo por contraseña temporal:
+# GET /auth/me y PATCH /auth/me/password.
+# ============================================================
+
+PROTEGIDO = [
+    Depends(get_usuario_activo)
+]
+
+# ------------------------------------------------------------
+# FORECAST: solo EMPRESA y solo sobre inventarios propios.
+#
+# Se aplica como dependencia del router para no tocar
+# forecast_controller: valida {id_inventario} de la ruta.
+# ------------------------------------------------------------
+
+async def verificar_forecast(
+    request: Request,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
+):
+
+    id_inventario = request.path_params.get(
+        "id_inventario"
+    )
+
+    if id_inventario:
+
+        await AccesoService.verificar_inventario(
+            user,
+            id_inventario
+        )
+
+
+FORECAST = [
+    Depends(verificar_forecast)
+]
 
 
 # ============================================================
@@ -339,7 +454,8 @@ app.include_router(
 
 app.include_router(
     almacen_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -349,7 +465,8 @@ app.include_router(
 
 app.include_router(
     zona_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -359,7 +476,8 @@ app.include_router(
 
 app.include_router(
     rack_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -369,7 +487,8 @@ app.include_router(
 
 app.include_router(
     producto_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -379,7 +498,8 @@ app.include_router(
 
 app.include_router(
     inventario_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -389,7 +509,8 @@ app.include_router(
 
 app.include_router(
     operario_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -399,7 +520,8 @@ app.include_router(
 
 app.include_router(
     movimiento_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -409,7 +531,8 @@ app.include_router(
 
 app.include_router(
     proveedor_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -419,7 +542,8 @@ app.include_router(
 
 app.include_router(
     orden_reposicion_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -429,7 +553,8 @@ app.include_router(
 
 app.include_router(
     detalle_reposicion_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -439,7 +564,8 @@ app.include_router(
 
 app.include_router(
     recepcion_mercaderia_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -449,7 +575,8 @@ app.include_router(
 
 app.include_router(
     detalle_recepcion_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -459,7 +586,8 @@ app.include_router(
 
 app.include_router(
     alerta_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -469,7 +597,8 @@ app.include_router(
 
 app.include_router(
     recomendacion_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
@@ -479,33 +608,22 @@ app.include_router(
 
 app.include_router(
     inventory_risk_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
 )
 
 
 # ============================================================
 # FORECAST
 #
-# Actualmente:
+# Movimiento -> DemandHistory -> FeatureBuilder
+# -> LightGBM -> D+1 ... D+7
 #
-# Movimiento
-#     ↓
-# DemandHistory
-#     ↓
-# Serie diaria
-#
-# Posteriormente:
-#
-# Serie diaria
-#     ↓
-# FeatureBuilder
-#     ↓
-# LightGBM
-#     ↓
-# D+1 ... D+7
+# Solo EMPRESA, sobre inventarios propios.
 # ============================================================
 
 app.include_router(
     forecast_router,
-    prefix=settings.api_prefix
+    prefix=settings.api_prefix,
+    dependencies=FORECAST
 )

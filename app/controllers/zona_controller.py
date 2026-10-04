@@ -2,13 +2,27 @@ from typing import List
 
 from fastapi import (
     APIRouter,
+    Depends,
     status
+)
+
+from app.dependencies.dependencies import (
+    require_empresa,
+    require_empresa_u_operario
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
 )
 
 from app.dto.zona_dto import (
     ZonaCreate,
     ZonaUpdate,
     ZonaResponse
+)
+
+from app.services.acceso_service import (
+    AccesoService
 )
 
 from app.services.zona_service import (
@@ -25,7 +39,7 @@ router = APIRouter(
 
 
 # ============================================================
-# CREAR
+# CREAR (EMPRESA)
 # ============================================================
 
 @router.post(
@@ -36,8 +50,16 @@ router = APIRouter(
     )
 )
 async def crear_zona(
-    data: ZonaCreate
+    data: ZonaCreate,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
+
+    await AccesoService.verificar_almacen(
+        user,
+        data.id_almacen
+    )
 
     return await (
         ZonaService.crear(
@@ -47,7 +69,7 @@ async def crear_zona(
 
 
 # ============================================================
-# OBTENER TODAS
+# OBTENER TODAS (DEL ALCANCE DEL USUARIO)
 # ============================================================
 
 @router.get(
@@ -56,11 +78,24 @@ async def crear_zona(
         ZonaResponse
     ]
 )
-async def obtener_zonas():
-
-    return await (
-        ZonaService.obtener_todas()
+async def obtener_zonas(
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
     )
+):
+
+    zonas = await (
+        AccesoService.zonas_visibles(
+            user
+        )
+    )
+
+    return [
+        await ZonaService.normalizar_zona(
+            zona
+        )
+        for zona in zonas
+    ]
 
 
 # ============================================================
@@ -76,8 +111,16 @@ async def obtener_zonas():
     ]
 )
 async def obtener_zonas_por_almacen(
-    id_almacen: str
+    id_almacen: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
+
+    await AccesoService.verificar_almacen(
+        user,
+        id_almacen
+    )
 
     return await (
         ZonaService.obtener_por_almacen(
@@ -95,8 +138,16 @@ async def obtener_zonas_por_almacen(
     response_model=ZonaResponse
 )
 async def obtener_zona(
-    id_zona: str
+    id_zona: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
+
+    await AccesoService.verificar_zona(
+        user,
+        id_zona
+    )
 
     return await (
         ZonaService.obtener_por_id(
@@ -106,7 +157,7 @@ async def obtener_zona(
 
 
 # ============================================================
-# ACTUALIZAR
+# ACTUALIZAR (EMPRESA)
 # ============================================================
 
 @router.put(
@@ -115,8 +166,16 @@ async def obtener_zona(
 )
 async def actualizar_zona(
     id_zona: str,
-    data: ZonaUpdate
+    data: ZonaUpdate,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
+
+    await AccesoService.verificar_zona(
+        user,
+        id_zona
+    )
 
     return await (
         ZonaService.actualizar(
@@ -127,7 +186,7 @@ async def actualizar_zona(
 
 
 # ============================================================
-# ELIMINAR
+# ELIMINAR (EMPRESA)
 # ============================================================
 
 @router.delete(
@@ -137,8 +196,16 @@ async def actualizar_zona(
     )
 )
 async def eliminar_zona(
-    id_zona: str
+    id_zona: str,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
+
+    await AccesoService.verificar_zona(
+        user,
+        id_zona
+    )
 
     return await (
         ZonaService.eliminar(

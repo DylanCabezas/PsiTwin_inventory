@@ -43,6 +43,23 @@ class ProveedorRepository:
             {"_id": 0}
         )
 
+    # ========================================================
+    # POR CORREO (LOGIN / UNICIDAD)
+    #
+    # Solo proveedores con cuenta: los proveedores antiguos
+    # sin cuenta pueden compartir correo de contacto.
+    # ========================================================
+
+    async def obtener_por_correo_con_cuenta(self, correo: str):
+
+        return await self.collection().find_one(
+            {
+                "correo": correo.lower().strip(),
+                "password_hash": {"$type": "string"}
+            },
+            {"_id": 0}
+        )
+
     async def obtener_por_ruc(self, ruc: str):
 
         return await self.collection().find_one(

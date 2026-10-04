@@ -177,6 +177,31 @@ class InventarioRepository:
 
 
     # ============================================================
+    # OBTENER POR VARIOS RACKS
+    # ============================================================
+
+    async def obtener_por_racks(
+        self,
+        ids_rack: List[str]
+    ) -> List[Dict[str, Any]]:
+
+        cursor = self.collection().find(
+            {
+                "id_rack": {
+                    "$in": list(ids_rack)
+                }
+            },
+            {
+                "_id": 0
+            }
+        )
+
+        return await cursor.to_list(
+            length=None
+        )
+
+
+    # ============================================================
     # ACTUALIZAR
     # ============================================================
 
@@ -292,4 +317,59 @@ class InventarioRepository:
         return (
             result.deleted_count > 0
         )
-    
+
+
+    # ============================================================
+    # HISTORIAL DE CAMBIOS (colección inventario_historial)
+    # ============================================================
+
+    async def registrar_historial(
+        self,
+        id_inventario: str,
+        id_operario: Optional[str],
+        accion: str,
+        antes: Optional[Dict[str, Any]],
+        despues: Optional[Dict[str, Any]]
+    ) -> None:
+
+        await (
+            get_database()["inventario_historial"]
+            .insert_one(
+                {
+                    "id_inventario": id_inventario,
+                    "id_operario": id_operario,
+                    "accion": accion,
+                    "antes": antes,
+                    "despues": despues,
+                    "fecha": datetime.now(
+                        timezone.utc
+                    )
+                }
+            )
+        )
+
+
+    async def obtener_historial(
+        self,
+        id_inventario: str
+    ) -> List[Dict[str, Any]]:
+
+        cursor = (
+            get_database()["inventario_historial"]
+            .find(
+                {
+                    "id_inventario": id_inventario
+                },
+                {
+                    "_id": 0
+                }
+            )
+            .sort(
+                "fecha",
+                -1
+            )
+        )
+
+        return await cursor.to_list(
+            length=None
+        )

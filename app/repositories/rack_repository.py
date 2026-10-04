@@ -167,6 +167,38 @@ class RackRepository:
 
 
     # ============================================================
+    # OBTENER POR VARIAS ZONAS
+    #
+    # Usado para calcular el alcance y para
+    # GET /racks/disponibles.
+    # ============================================================
+
+    @staticmethod
+    async def obtener_por_zonas(
+        ids_zona: List[str]
+    ) -> List[Dict[str, Any]]:
+
+        collection = (
+            RackRepository.collection()
+        )
+
+        cursor = collection.find(
+            {
+                "id_zona": {
+                    "$in": list(ids_zona)
+                }
+            },
+            {
+                "_id": 0
+            }
+        )
+
+        return await cursor.to_list(
+            length=None
+        )
+
+
+    # ============================================================
     # ACTUALIZAR
     # ============================================================
 

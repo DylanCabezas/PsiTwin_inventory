@@ -28,7 +28,8 @@ class EstadoAlerta(str, Enum):
 
 
 class AlertaCreate(BaseModel):
-    id_empresa: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
     id_almacen: str
     id_inventario: str
     id_producto: str

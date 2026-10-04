@@ -12,7 +12,9 @@ class RecepcionMercaderiaCreate(BaseModel):
 
     id_orden_reposicion: str
 
-    id_operario: str
+    # OPERARIO: se fuerza al del token (puede omitirse).
+    # EMPRESA: obligatorio.
+    id_operario: str | None = None
 
     fecha_recepcion: datetime | None = None
 
@@ -52,7 +54,9 @@ class UbicarDetalleRecepcion(BaseModel):
 
 class ResolverEvaluacion(BaseModel):
 
-    id_operario: str
+    # OPERARIO: se fuerza al del token (puede omitirse).
+    # EMPRESA: obligatorio.
+    id_operario: str | None = None
 
     estado_recepcion: EstadoRecepcion
 

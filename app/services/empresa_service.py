@@ -40,6 +40,14 @@ from app.repositories import (
     empresa_repository
 )
 
+from app.services.cuenta_service import (
+    validar_correo_disponible
+)
+
+from app.utils import (
+    security
+)
+
 
 # ============================================================
 # PASSWORD
@@ -115,35 +123,13 @@ def create_access_token(
     id_empresa: str
 ) -> str:
 
-    now = datetime.now(
-        timezone.utc
-    )
+    # Delegado a app.utils.security: el token
+    # incluye ahora rol = EMPRESA e id_empresa.
 
-    expiration = (
-        now
-        +
-        timedelta(
-            minutes=(
-                settings
-                .access_token_expire_minutes
-            )
-        )
-    )
-
-    payload = {
-        "sub": id_empresa,
-
-        "type": "empresa",
-
-        "iat": now,
-
-        "exp": expiration
-    }
-
-    return jwt.encode(
-        payload,
-        settings.secret_key,
-        algorithm=settings.algorithm
+    return security.create_access_token(
+        sub=id_empresa,
+        rol=security.ROL_EMPRESA,
+        id_empresa=id_empresa
     )
 
 
@@ -252,6 +238,11 @@ async def register_empresa(
                 "registrada con ese correo"
             )
         )
+
+    # Único entre empresas, operarios y proveedores
+    await validar_correo_disponible(
+        correo
+    )
 
     existing_ruc = (
         await empresa_repository
@@ -516,6 +507,11 @@ async def update_empresa_profile(
                     "El correo ya está registrado"
                 )
             )
+
+        await validar_correo_disponible(
+            correo,
+            id_empresa
+        )
 
         if current.get("correo") and current.get("correo").lower() != correo:
             update_data["correo_verificado"] = False

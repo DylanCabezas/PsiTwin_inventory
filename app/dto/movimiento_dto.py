@@ -24,7 +24,11 @@ class MotivoMovimiento(str, Enum):
 
 class MovimientoCreate(BaseModel):
     id_inventario: str
-    id_operario: str
+
+    # Se fuerza al operario del token (puede omitirse).
+    id_operario: Optional[str] = None
+
+    # Interno: idempotencia de la entrada por recepción.
     id_detalle_recepcion: Optional[str] = None
 
     tipo_movimiento: TipoMovimiento
@@ -46,6 +50,10 @@ class MovimientoResponse(BaseModel):
     id_producto: str
     id_rack: str
     id_operario: str
+
+    # Historial: autor y zona del rack
+    operario_nombre: Optional[str] = None
+    id_zona: Optional[str] = None
 
     tipo_movimiento: TipoMovimiento
     motivo_movimiento: MotivoMovimiento

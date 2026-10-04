@@ -1,8 +1,24 @@
+from typing import (
+    Any,
+    Dict,
+    List
+)
+
 from fastapi import HTTPException, status
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
 
 from app.dto.operario_dto import (
     OperarioCreate,
-    OperarioUpdate
+    OperarioUpdate,
+    OperarioResetPassword
+)
+
+from app.services.cuenta_service import (
+    sanitizar_cuenta,
+    validar_correo_disponible
 )
 
 from app.repositories.operario_repository import (
@@ -17,22 +33,109 @@ from app.repositories.almacen_repository import (
     AlmacenRepository
 )
 
+from app.utils.security import (
+    hash_password
+)
+
 
 class OperarioService:
 
     # ============================================================
+    # SANITIZAR
+    #
+    # Nunca exponer password_hash.
+    # ============================================================
+
+    @staticmethod
+    def sanitizar(
+        operario: Dict[str, Any]
+    ) -> Dict[str, Any]:
+
+        return sanitizar_cuenta(
+            operario
+        )
+
+
+    def sanitizar_lista(
+        self,
+        operarios: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+
+        return [
+            self.sanitizar(operario)
+            for operario in operarios
+        ]
+
+
+    # ============================================================
+    # VALIDAR CORREO UNICO
+    #
+    # Único entre empresas, operarios y proveedores.
+    # ============================================================
+
+    @staticmethod
+    async def validar_correo_disponible(
+        correo: str,
+        id_operario_actual: str | None = None
+    ) -> str:
+
+        return await validar_correo_disponible(
+            correo,
+            id_operario_actual
+        )
+
+
+    # ============================================================
+    # VALIDAR ALMACEN DE LA EMPRESA
+    # ============================================================
+
+    @staticmethod
+    async def validar_almacen(
+        id_empresa: str,
+        id_almacen: str
+    ) -> None:
+
+        almacen = await (
+            AlmacenRepository
+            .obtener_por_id(
+                id_almacen
+            )
+        )
+
+        if (
+            not almacen
+            or
+            almacen.get("id_empresa")
+            != id_empresa
+        ):
+
+            raise HTTPException(
+                status_code=
+                    status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "El almacén del operario no pertenece "
+                    "a la empresa"
+                )
+            )
+
+
+    # ============================================================
     # CREAR
+    #
+    # id_empresa se toma del token.
+    # Queda con debe_cambiar_password = true.
     # ============================================================
 
     async def crear_operario(
         self,
-        data: OperarioCreate
+        data: OperarioCreate,
+        user: UsuarioActual
     ):
 
         empresa = await (
             EmpresaRepository
             .obtener_por_id(
-                data.id_empresa
+                user.id_empresa
             )
         )
 
@@ -45,90 +148,86 @@ class OperarioService:
                     "Empresa no encontrada"
             )
 
-        if data.id_almacen:
-            almacen = await AlmacenRepository.obtener_por_id(
-                data.id_almacen
+        await self.validar_almacen(
+            user.id_empresa,
+            data.id_almacen
+        )
+
+        correo = await (
+            self.validar_correo_disponible(
+                str(data.correo)
             )
-            if not almacen or almacen.get("id_empresa") != data.id_empresa:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        "El almacén del operario no pertenece "
-                        "a la empresa"
-                    )
-                )
-
-
-        operario_data = (
-            data.model_dump()
         )
 
-        operario_data["correo"] = (
-            str(operario_data["correo"]).strip().lower()
-        )
-        operario_data["correo_verificado"] = False
-        operario_data["fecha_verificacion_correo"] = None
+        operario_data = {
 
-        operario_data[
-            "nombre"
-        ] = (
-            operario_data[
-                "nombre"
-            ].strip()
-        )
+            "id_empresa":
+                user.id_empresa,
 
-        operario_data[
-            "apellido"
-        ] = (
-            operario_data[
-                "apellido"
-            ].strip()
-        )
+            "id_almacen":
+                data.id_almacen,
 
-        operario_data[
-            "cargo"
-        ] = (
-            operario_data[
-                "cargo"
-            ].strip()
-        )
+            "nombre":
+                data.nombre.strip(),
 
-        operario_data[
-            "turno"
-        ] = (
-            operario_data[
-                "turno"
-            ].strip().upper()
-        )
+            "apellido":
+                data.apellido.strip(),
 
-        operario_data[
-            "estado"
-        ] = (
-            operario_data[
-                "estado"
-            ].strip().upper()
-        )
+            "cargo":
+                data.cargo.strip(),
 
+            "turno":
+                data.turno.strip().upper(),
 
-        return await (
+            "estado":
+                data.estado.strip().upper(),
+
+            "correo":
+                correo,
+
+            "correo_verificado":
+                False,
+
+            "fecha_verificacion_correo":
+                None,
+
+            "password_hash":
+                hash_password(
+                    data.password_temporal
+                ),
+
+            "debe_cambiar_password":
+                True
+        }
+
+        creado = await (
             OperarioRepository
             .crear(
                 operario_data
             )
         )
 
+        return self.sanitizar(
+            creado
+        )
+
 
     # ============================================================
-    # OBTENER TODOS
+    # OBTENER TODOS (DE LA EMPRESA)
     # ============================================================
 
     async def obtener_operarios(
-        self
+        self,
+        user: UsuarioActual
     ):
 
-        return await (
-            OperarioRepository
-            .obtener_todos()
+        return self.sanitizar_lista(
+            await (
+                OperarioRepository
+                .obtener_por_empresa(
+                    user.id_empresa
+                )
+            )
         )
 
 
@@ -138,7 +237,8 @@ class OperarioService:
 
     async def obtener_operario(
         self,
-        id_operario: str
+        id_operario: str,
+        user: UsuarioActual
     ):
 
         operario = await (
@@ -148,7 +248,12 @@ class OperarioService:
             )
         )
 
-        if not operario:
+        if (
+            not operario
+            or
+            operario.get("id_empresa")
+            != user.id_empresa
+        ):
 
             raise HTTPException(
                 status_code=
@@ -157,7 +262,9 @@ class OperarioService:
                     "Operario no encontrado"
             )
 
-        return operario
+        return self.sanitizar(
+            operario
+        )
 
 
     # ============================================================
@@ -166,17 +273,11 @@ class OperarioService:
 
     async def obtener_por_empresa(
         self,
-        id_empresa: str
+        id_empresa: str,
+        user: UsuarioActual
     ):
 
-        empresa = await (
-            EmpresaRepository
-            .obtener_por_id(
-                id_empresa
-            )
-        )
-
-        if not empresa:
+        if id_empresa != user.id_empresa:
 
             raise HTTPException(
                 status_code=
@@ -185,11 +286,8 @@ class OperarioService:
                     "Empresa no encontrada"
             )
 
-        return await (
-            OperarioRepository
-            .obtener_por_empresa(
-                id_empresa
-            )
+        return await self.obtener_operarios(
+            user
         )
 
 
@@ -199,7 +297,8 @@ class OperarioService:
 
     async def obtener_por_estado(
         self,
-        estado: str
+        estado: str,
+        user: UsuarioActual
     ):
 
         estado = (
@@ -208,11 +307,20 @@ class OperarioService:
             .upper()
         )
 
-        return await (
+        operarios = await (
             OperarioRepository
             .obtener_por_estado(
                 estado
             )
+        )
+
+        return self.sanitizar_lista(
+            [
+                operario
+                for operario in operarios
+                if operario.get("id_empresa")
+                == user.id_empresa
+            ]
         )
 
 
@@ -222,7 +330,8 @@ class OperarioService:
 
     async def obtener_por_turno(
         self,
-        turno: str
+        turno: str,
+        user: UsuarioActual
     ):
 
         turno = (
@@ -231,11 +340,20 @@ class OperarioService:
             .upper()
         )
 
-        return await (
+        operarios = await (
             OperarioRepository
             .obtener_por_turno(
                 turno
             )
+        )
+
+        return self.sanitizar_lista(
+            [
+                operario
+                for operario in operarios
+                if operario.get("id_empresa")
+                == user.id_empresa
+            ]
         )
 
 
@@ -246,25 +364,14 @@ class OperarioService:
     async def actualizar_operario(
         self,
         id_operario: str,
-        data: OperarioUpdate
+        data: OperarioUpdate,
+        user: UsuarioActual
     ):
 
-        operario = await (
-            OperarioRepository
-            .obtener_por_id(
-                id_operario
-            )
+        operario = await self.obtener_operario(
+            id_operario,
+            user
         )
-
-        if not operario:
-
-            raise HTTPException(
-                status_code=
-                    status.HTTP_404_NOT_FOUND,
-                detail=
-                    "Operario no encontrado"
-            )
-
 
         update_data = (
             data.model_dump(
@@ -272,98 +379,77 @@ class OperarioService:
             )
         )
 
+        update_data = {
+            campo: valor
+            for campo, valor in update_data.items()
+            if valor is not None
+        }
+
         if not update_data:
             return operario
 
 
-        if "correo" in update_data and update_data["correo"] is not None:
-            update_data["correo"] = str(update_data["correo"]).strip().lower()
-            if operario.get("correo") and operario.get("correo").lower() != update_data["correo"]:
+        if "id_almacen" in update_data:
+
+            await self.validar_almacen(
+                user.id_empresa,
+                update_data["id_almacen"]
+            )
+
+
+        if "correo" in update_data:
+
+            update_data[
+                "correo"
+            ] = await (
+                self.validar_correo_disponible(
+                    str(update_data["correo"]),
+                    id_operario
+                )
+            )
+
+            # Correo distinto -> hay que verificarlo de nuevo
+            if (
+                (operario.get("correo") or "").lower()
+                != update_data["correo"]
+            ):
                 update_data["correo_verificado"] = False
                 update_data["fecha_verificacion_correo"] = None
 
-        if (
-            "nombre"
-            in update_data
-            and
-            update_data["nombre"]
-            is not None
-        ):
-            update_data[
-                "nombre"
-            ] = (
-                update_data[
-                    "nombre"
-                ].strip()
-            )
 
-
-        if (
-            "apellido"
-            in update_data
-            and
-            update_data["apellido"]
-            is not None
-        ):
-            update_data[
-                "apellido"
-            ] = (
-                update_data[
-                    "apellido"
-                ].strip()
-            )
-
-
-        if (
+        for campo in [
+            "nombre",
+            "apellido",
             "cargo"
-            in update_data
-            and
-            update_data["cargo"]
-            is not None
-        ):
-            update_data[
-                "cargo"
-            ] = (
+        ]:
+
+            if campo in update_data:
+
                 update_data[
-                    "cargo"
-                ].strip()
-            )
+                    campo
+                ] = (
+                    update_data[
+                        campo
+                    ].strip()
+                )
 
 
-        if (
-            "turno"
-            in update_data
-            and
-            update_data["turno"]
-            is not None
-        ):
-            update_data[
-                "turno"
-            ] = (
-                update_data[
-                    "turno"
-                ]
-                .strip()
-                .upper()
-            )
-
-
-        if (
+        for campo in [
+            "turno",
             "estado"
-            in update_data
-            and
-            update_data["estado"]
-            is not None
-        ):
-            update_data[
-                "estado"
-            ] = (
+        ]:
+
+            if campo in update_data:
+
                 update_data[
-                    "estado"
-                ]
-                .strip()
-                .upper()
-            )
+                    campo
+                ] = (
+                    update_data[
+                        campo
+                    ]
+                    .strip()
+                    .upper()
+                )
 
 
         actualizado = await (
@@ -383,7 +469,76 @@ class OperarioService:
                     "Operario no encontrado"
             )
 
-        return actualizado
+        return self.sanitizar(
+            actualizado
+        )
+
+
+    # ============================================================
+    # RESET PASSWORD (EMPRESA)
+    #
+    # También da credenciales a operarios antiguos:
+    # si no tienen correo, deben tenerlo antes
+    # (PUT /operarios/{id} con "correo").
+    # ============================================================
+
+    async def reset_password(
+        self,
+        id_operario: str,
+        data: OperarioResetPassword,
+        user: UsuarioActual
+    ):
+
+        operario = await self.obtener_operario(
+            id_operario,
+            user
+        )
+
+        if data.correo is not None:
+
+            correo = await (
+                self.validar_correo_disponible(
+                    str(data.correo),
+                    id_operario
+                )
+            )
+
+            await (
+                OperarioRepository
+                .actualizar(
+                    id_operario,
+                    {
+                        "correo": correo
+                    }
+                )
+            )
+
+        elif not operario.get("correo"):
+
+            raise HTTPException(
+                status_code=
+                    status.HTTP_409_CONFLICT,
+                detail=(
+                    "El operario no tiene correo. "
+                    "Envíe 'correo' en el body "
+                    "(o asígnelo con PUT /operarios/{id})"
+                )
+            )
+
+        actualizado = await (
+            OperarioRepository
+            .actualizar_password(
+                id_operario,
+                hash_password(
+                    data.password_temporal
+                ),
+                True
+            )
+        )
+
+        return self.sanitizar(
+            actualizado
+        )
 
 
     # ============================================================
@@ -392,25 +547,14 @@ class OperarioService:
 
     async def eliminar_operario(
         self,
-        id_operario: str
+        id_operario: str,
+        user: UsuarioActual
     ):
 
-        operario = await (
-            OperarioRepository
-            .obtener_por_id(
-                id_operario
-            )
+        await self.obtener_operario(
+            id_operario,
+            user
         )
-
-        if not operario:
-
-            raise HTTPException(
-                status_code=
-                    status.HTTP_404_NOT_FOUND,
-                detail=
-                    "Operario no encontrado"
-            )
-
 
         eliminado = await (
             OperarioRepository

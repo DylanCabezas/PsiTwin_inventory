@@ -1,11 +1,29 @@
 from fastapi import (
     APIRouter,
+    Depends,
     status
+)
+
+from app.dependencies.dependencies import (
+    require_empresa
+)
+
+from app.services.acceso_service import (
+    AccesoService
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
+
+from app.dto.empresa_dto import (
+    MessageResponse
 )
 
 from app.dto.operario_dto import (
     OperarioCreate,
     OperarioUpdate,
+    OperarioResetPassword,
     OperarioResponse
 )
 from app.dto.email_verification_dto import (
@@ -31,7 +49,7 @@ email_verification_service = EmailVerificationService()
 
 
 # ============================================================
-# CREAR OPERARIO
+# CREAR OPERARIO (EMPRESA)
 # ============================================================
 
 @router.post(
@@ -41,18 +59,22 @@ email_verification_service = EmailVerificationService()
         status.HTTP_201_CREATED
 )
 async def crear_operario(
-    data: OperarioCreate
+    data: OperarioCreate,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.crear_operario(
-            data
+            data,
+            user
         )
     )
 
 
 # ============================================================
-# OBTENER TODOS
+# OBTENER TODOS (EMPRESA)
 # ============================================================
 
 @router.get(
@@ -60,10 +82,16 @@ async def crear_operario(
     response_model=
         list[OperarioResponse]
 )
-async def obtener_operarios():
+async def obtener_operarios(
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
+):
 
     return await (
-        service.obtener_operarios()
+        service.obtener_operarios(
+            user
+        )
     )
 
 
@@ -77,12 +105,16 @@ async def obtener_operarios():
         list[OperarioResponse]
 )
 async def obtener_por_empresa(
-    id_empresa: str
+    id_empresa: str,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.obtener_por_empresa(
-            id_empresa
+            id_empresa,
+            user
         )
     )
 
@@ -97,12 +129,16 @@ async def obtener_por_empresa(
         list[OperarioResponse]
 )
 async def obtener_por_estado(
-    estado: str
+    estado: str,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.obtener_por_estado(
-            estado
+            estado,
+            user
         )
     )
 
@@ -117,12 +153,16 @@ async def obtener_por_estado(
         list[OperarioResponse]
 )
 async def obtener_por_turno(
-    turno: str
+    turno: str,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.obtener_por_turno(
-            turno
+            turno,
+            user
         )
     )
 
@@ -137,12 +177,16 @@ async def obtener_por_turno(
         OperarioResponse
 )
 async def obtener_operario(
-    id_operario: str
+    id_operario: str,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.obtener_operario(
-            id_operario
+            id_operario,
+            user
         )
     )
 
@@ -158,13 +202,43 @@ async def obtener_operario(
 )
 async def actualizar_operario(
     id_operario: str,
-    data: OperarioUpdate
+    data: OperarioUpdate,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.actualizar_operario(
             id_operario,
-            data
+            data,
+            user
+        )
+    )
+
+
+# ============================================================
+# RESET PASSWORD (EMPRESA)
+# ============================================================
+
+@router.post(
+    "/{id_operario}/reset-password",
+    response_model=
+        OperarioResponse
+)
+async def reset_password(
+    id_operario: str,
+    data: OperarioResetPassword,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
+):
+
+    return await (
+        service.reset_password(
+            id_operario,
+            data,
+            user
         )
     )
 
@@ -174,7 +248,11 @@ async def actualizar_operario(
     response_model=EmailVerificationSendResponse,
     summary="Enviar verificación de correo de operario",
 )
-async def send_operario_email_verification(id_operario: str):
+async def send_operario_email_verification(
+    id_operario: str,
+    user: UsuarioActual = Depends(require_empresa),
+):
+    await AccesoService.verificar_operario(user, id_operario)
     return await email_verification_service.request_entity_verification(
         "operario",
         id_operario,
@@ -189,7 +267,9 @@ async def send_operario_email_verification(id_operario: str):
 async def verify_operario_email(
     id_operario: str,
     data: EmailVerificationCodeRequest,
+    user: UsuarioActual = Depends(require_empresa),
 ):
+    await AccesoService.verificar_operario(user, id_operario)
     return await email_verification_service.verify_entity_code(
         "operario",
         id_operario,
@@ -207,11 +287,15 @@ async def verify_operario_email(
         status.HTTP_200_OK
 )
 async def eliminar_operario(
-    id_operario: str
+    id_operario: str,
+    user: UsuarioActual = Depends(
+        require_empresa
+    )
 ):
 
     return await (
         service.eliminar_operario(
-            id_operario
+            id_operario,
+            user
         )
     )

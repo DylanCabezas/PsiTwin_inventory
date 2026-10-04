@@ -15,7 +15,8 @@ from pydantic import (
 
 class AlmacenCreate(BaseModel):
 
-    id_empresa: str
+    # Se ignora: se toma del token.
+    id_empresa: Optional[str] = None
 
     nombre: str = Field(
         ...,

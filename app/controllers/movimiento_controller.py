@@ -1,12 +1,30 @@
 from typing import List
 
-from fastapi import APIRouter, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    status
+)
+
+from app.dependencies.dependencies import (
+    require_empresa_u_operario,
+    require_operario
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
 
 from app.dto.movimiento_dto import (
     MovimientoCreate,
     MovimientoResponse,
     TipoMovimiento,
     MotivoMovimiento
+)
+
+from app.services.acceso_service import (
+    AccesoService
 )
 
 from app.services.movimiento_service import (
@@ -23,7 +41,34 @@ service = MovimientoService()
 
 
 # ============================================================
-# CREAR
+# ALCANCE
+#
+# EMPRESA  -> movimientos de racks de sus almacenes
+# OPERARIO -> movimientos de racks de su almacén
+# ============================================================
+
+async def _filtrar_alcance(
+    user: UsuarioActual,
+    movimientos: list
+) -> list:
+
+    return await service.enriquecer(
+        AccesoService.filtrar(
+            movimientos,
+            "id_rack",
+            await AccesoService.ids_racks(
+                user
+            )
+        )
+    )
+
+
+# ============================================================
+# CREAR (OPERARIO)
+#
+# Solo SALIDA por VENTA o VENCIMIENTO, sobre inventarios
+# de su almacén. Las ENTRADAS se generan únicamente
+# desde la recepción de mercadería.
 # ============================================================
 
 @router.post(
@@ -32,12 +77,46 @@ service = MovimientoService()
     status_code=status.HTTP_201_CREATED
 )
 async def crear_movimiento(
-    data: MovimientoCreate
+    data: MovimientoCreate,
+    user: UsuarioActual = Depends(
+        require_operario
+    )
 ):
 
-    return await service.crear_movimiento(
-        data
+    if (
+        data.tipo_movimiento != TipoMovimiento.SALIDA
+        or data.motivo_movimiento not in (
+            MotivoMovimiento.VENTA,
+            MotivoMovimiento.VENCIMIENTO
+        )
+    ):
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Solo se pueden registrar SALIDAS "
+                "por VENTA o VENCIMIENTO"
+            )
+        )
+
+    await AccesoService.verificar_inventario(
+        user,
+        data.id_inventario
     )
+
+    # Campo interno (recepciones): no se acepta del cliente.
+    data.id_detalle_recepcion = None
+
+    return (
+        await service.enriquecer(
+            [
+                await service.crear_movimiento(
+                    data,
+                    user
+                )
+            ]
+        )
+    )[0]
 
 
 # ============================================================
@@ -48,9 +127,16 @@ async def crear_movimiento(
     "",
     response_model=List[MovimientoResponse]
 )
-async def obtener_movimientos():
+async def obtener_movimientos(
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
+):
 
-    return await service.obtener_movimientos()
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_movimientos()
+    )
 
 
 # ============================================================
@@ -62,11 +148,21 @@ async def obtener_movimientos():
     response_model=List[MovimientoResponse]
 )
 async def obtener_por_inventario(
-    id_inventario: str
+    id_inventario: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_por_inventario(
+    await AccesoService.verificar_inventario(
+        user,
         id_inventario
+    )
+
+    return await service.enriquecer(
+        await service.obtener_por_inventario(
+            id_inventario
+        )
     )
 
 
@@ -79,11 +175,22 @@ async def obtener_por_inventario(
     response_model=List[MovimientoResponse]
 )
 async def obtener_por_producto(
-    id_producto: str
+    id_producto: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_por_producto(
+    await AccesoService.verificar_producto(
+        user,
         id_producto
+    )
+
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_por_producto(
+            id_producto
+        )
     )
 
 
@@ -96,11 +203,21 @@ async def obtener_por_producto(
     response_model=List[MovimientoResponse]
 )
 async def obtener_por_rack(
-    id_rack: str
+    id_rack: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_por_rack(
+    await AccesoService.verificar_rack(
+        user,
         id_rack
+    )
+
+    return await service.enriquecer(
+        await service.obtener_por_rack(
+            id_rack
+        )
     )
 
 
@@ -113,11 +230,22 @@ async def obtener_por_rack(
     response_model=List[MovimientoResponse]
 )
 async def obtener_por_operario(
-    id_operario: str
+    id_operario: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_por_operario(
+    await AccesoService.verificar_operario(
+        user,
         id_operario
+    )
+
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_por_operario(
+            id_operario
+        )
     )
 
 
@@ -130,11 +258,17 @@ async def obtener_por_operario(
     response_model=List[MovimientoResponse]
 )
 async def obtener_por_tipo(
-    tipo_movimiento: TipoMovimiento
+    tipo_movimiento: TipoMovimiento,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_por_tipo(
-        tipo_movimiento
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_por_tipo(
+            tipo_movimiento
+        )
     )
 
 
@@ -147,11 +281,17 @@ async def obtener_por_tipo(
     response_model=List[MovimientoResponse]
 )
 async def obtener_por_motivo(
-    motivo_movimiento: MotivoMovimiento
+    motivo_movimiento: MotivoMovimiento,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_por_motivo(
-        motivo_movimiento
+    return await _filtrar_alcance(
+        user,
+        await service.obtener_por_motivo(
+            motivo_movimiento
+        )
     )
 
 
@@ -165,9 +305,23 @@ async def obtener_por_motivo(
     response_model=MovimientoResponse
 )
 async def obtener_movimiento(
-    id_movimiento: str
+    id_movimiento: str,
+    user: UsuarioActual = Depends(
+        require_empresa_u_operario
+    )
 ):
 
-    return await service.obtener_movimiento(
+    movimiento = await service.obtener_movimiento(
         id_movimiento
     )
+
+    await AccesoService.verificar_rack(
+        user,
+        movimiento["id_rack"]
+    )
+
+    return (
+        await service.enriquecer(
+            [movimiento]
+        )
+    )[0]

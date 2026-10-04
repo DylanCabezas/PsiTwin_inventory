@@ -168,6 +168,9 @@ class ZonaService:
             "tipo_zona":
                 data.tipo_zona.strip(),
 
+            "refrigerada":
+                data.refrigerada,
+
             "temperatura_min":
                 data.temperatura_min,
 

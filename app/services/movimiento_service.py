@@ -18,6 +18,22 @@ from app.repositories.operario_repository import (
     OperarioRepository
 )
 
+from app.repositories.rack_repository import (
+    RackRepository
+)
+
+from app.repositories.producto_repository import (
+    ProductoRepository
+)
+
+from app.dto.auth_dto import (
+    UsuarioActual
+)
+
+from app.services.rack_service import (
+    RackService
+)
+
 
 class MovimientoService:
 
@@ -106,7 +122,8 @@ class MovimientoService:
 
     async def crear_movimiento(
         self,
-        data: MovimientoCreate
+        data: MovimientoCreate,
+        user: UsuarioActual | None = None
     ):
 
         if data.id_detalle_recepcion:
@@ -118,6 +135,25 @@ class MovimientoService:
             )
             if existente:
                 return existente
+
+        # ----------------------------------------------------
+        # 0. Operario responsable
+        #
+        # OPERARIO: siempre el del token.
+        # ----------------------------------------------------
+
+        if user is not None and user.es_operario:
+
+            data.id_operario = user.id_operario
+
+        if not data.id_operario:
+
+            raise HTTPException(
+                status_code=422,
+                detail=(
+                    "Debe indicar id_operario"
+                )
+            )
 
         # ----------------------------------------------------
         # 1. Validar inventario
@@ -145,7 +181,16 @@ class MovimientoService:
             )
         )
 
-        if not operario:
+        if (
+            not operario
+            or
+            (
+                user is not None
+                and
+                operario.get("id_empresa")
+                != user.id_empresa
+            )
+        ):
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Operario no encontrado"
@@ -267,6 +312,53 @@ class MovimientoService:
             )
 
         # ----------------------------------------------------
+        # 9.1 Validar capacidad del rack
+        #
+        # ENTRADA y AJUSTE: la carga resultante (kg) no
+        # puede superar la capacidad del rack.
+        # ----------------------------------------------------
+
+        incremento = (
+            stock_nuevo
+            - stock_anterior
+        )
+
+        if (
+            data.tipo_movimiento
+            in (
+                TipoMovimiento.ENTRADA,
+                TipoMovimiento.AJUSTE
+            )
+            and
+            incremento > 0
+        ):
+
+            rack = await (
+                RackRepository.obtener_por_id(
+                    inventario["id_rack"]
+                )
+            )
+
+            if not rack:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Rack no encontrado"
+                )
+
+            producto = await (
+                ProductoRepository.obtener_por_id(
+                    inventario["id_producto"]
+                )
+            )
+
+            await RackService.validar_asignacion(
+                rack,
+                producto or {},
+                incremento,
+                exigir_disponible=False
+            )
+
+        # ----------------------------------------------------
         # 10. Actualizar inventario
         # ----------------------------------------------------
 
@@ -345,6 +437,54 @@ class MovimientoService:
             raise
 
         return movimiento
+
+    # ========================================================
+    # ENRIQUECER (HISTORIAL PARA LA EMPRESA)
+    #
+    # Añade operario_nombre e id_zona a cada movimiento.
+    # ========================================================
+
+    async def enriquecer(self, movimientos: list) -> list:
+
+        nombres = await (
+            self.operario_repository.nombres_por_ids(
+                [
+                    movimiento.get("id_operario")
+                    for movimiento in movimientos
+                ]
+            )
+        )
+
+        racks = await RackRepository.collection().find(
+            {
+                "id_rack": {
+                    "$in": list(
+                        {
+                            movimiento.get("id_rack")
+                            for movimiento in movimientos
+                        }
+                    )
+                }
+            },
+            {"_id": 0, "id_rack": 1, "id_zona": 1}
+        ).to_list(length=None)
+
+        zonas = {
+            rack["id_rack"]: rack.get("id_zona")
+            for rack in racks
+        }
+
+        for movimiento in movimientos:
+
+            movimiento["operario_nombre"] = nombres.get(
+                movimiento.get("id_operario")
+            )
+
+            movimiento["id_zona"] = zonas.get(
+                movimiento.get("id_rack")
+            )
+
+        return movimientos
 
     # ========================================================
     # OBTENER TODOS

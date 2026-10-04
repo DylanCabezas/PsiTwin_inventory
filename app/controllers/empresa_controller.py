@@ -4,9 +4,22 @@ from fastapi import (
     status
 )
 
-from fastapi.security import (
-    HTTPAuthorizationCredentials,
-    HTTPBearer
+from app.dependencies.dependencies import (
+    get_current_empresa_id,
+    get_current_user,
+    require_empresa
+)
+
+from app.dto.auth_dto import (
+    CambiarPasswordRequest,
+    LoginRequest,
+    LoginResponse,
+    MeResponse,
+    UsuarioActual
+)
+
+from app.services.acceso_service import (
+    AccesoService
 )
 
 from app.dto.empresa_dto import (
@@ -26,7 +39,8 @@ from app.dto.email_verification_dto import (
 )
 
 from app.services import (
-    empresa_service
+    empresa_service,
+    auth_service
 )
 from app.services.email_verification_service import EmailVerificationService
 
@@ -39,35 +53,13 @@ router = APIRouter(
 
 
 # ============================================================
-# BEARER AUTH
+# AUTH
+#
+# get_current_empresa_id: solo sesiones EMPRESA
+# (tokens antiguos sin rol incluidos).
 # ============================================================
 
-bearer_scheme = HTTPBearer(
-    auto_error=True
-)
-
 email_verification_service = EmailVerificationService()
-
-
-async def get_current_empresa_id(
-    credentials:
-        HTTPAuthorizationCredentials
-        =
-        Depends(
-            bearer_scheme
-        )
-) -> str:
-
-    token = (
-        credentials.credentials
-    )
-
-    return (
-        empresa_service
-        .decode_access_token(
-            token
-        )
-    )
 
 
 # ============================================================
@@ -105,22 +97,76 @@ async def register(
 @router.post(
     "/auth/login",
     response_model=(
-        EmpresaLoginResponse
+        LoginResponse
     ),
     status_code=(
         status.HTTP_200_OK
     ),
-    summary="Iniciar sesión"
+    summary=(
+        "Iniciar sesión "
+        "(empresa u operario)"
+    )
 )
 async def login(
-    data: EmpresaLoginRequest
+    data: LoginRequest
 ):
 
     return await (
-        empresa_service
-        .login_empresa(
+        auth_service
+        .login(
             data
         )
+    )
+
+
+# ============================================================
+# ME (CUALQUIER ROL)
+#
+# GET /api/v1/auth/me
+#
+# Permitido aunque deba cambiar la contraseña.
+# ============================================================
+
+@router.get(
+    "/auth/me",
+    response_model=MeResponse,
+    summary="Sesión actual"
+)
+async def me(
+    user: UsuarioActual = Depends(
+        get_current_user
+    )
+):
+
+    return await auth_service.me(
+        user
+    )
+
+
+# ============================================================
+# CAMBIAR PASSWORD (OPERARIO / PROVEEDOR)
+#
+# PATCH /api/v1/auth/me/password
+# ============================================================
+
+@router.patch(
+    "/auth/me/password",
+    response_model=MessageResponse,
+    summary=(
+        "Cambiar contraseña "
+        "(operario o proveedor)"
+    )
+)
+async def cambiar_mi_password(
+    data: CambiarPasswordRequest,
+    user: UsuarioActual = Depends(
+        get_current_user
+    )
+):
+
+    return await auth_service.cambiar_password(
+        user,
+        data
     )
 
 
@@ -253,7 +299,11 @@ async def delete_my_empresa(
     response_model=EmailVerificationSendResponse,
     summary="Enviar verificación de correo de empresa",
 )
-async def send_empresa_email_verification(id_empresa: str):
+async def send_empresa_email_verification(
+    id_empresa: str,
+    user: UsuarioActual = Depends(require_empresa),
+):
+    AccesoService.verificar_empresa(user, id_empresa)
     return await email_verification_service.request_entity_verification(
         "empresa",
         id_empresa,
@@ -268,7 +318,9 @@ async def send_empresa_email_verification(id_empresa: str):
 async def verify_empresa_email(
     id_empresa: str,
     data: EmailVerificationCodeRequest,
+    user: UsuarioActual = Depends(require_empresa),
 ):
+    AccesoService.verificar_empresa(user, id_empresa)
     return await email_verification_service.verify_entity_code(
         "empresa",
         id_empresa,
