@@ -109,6 +109,10 @@ from app.controllers.inventory_risk_controller import (
     router as inventory_risk_router
 )
 
+from app.controllers.saiki_controller import (
+    router as saiki_router
+)
+
 # NUEVO:
 # Controller temporal para probar el historial
 # de demanda que posteriormente utilizará ML.
@@ -624,6 +628,11 @@ app.include_router(
 
 app.include_router(
     forecast_router,
+    prefix=settings.api_prefix
+)
+
+app.include_router(
+    saiki_router,
     prefix=settings.api_prefix,
     dependencies=FORECAST
 )
