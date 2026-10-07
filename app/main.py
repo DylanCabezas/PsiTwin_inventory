@@ -628,11 +628,12 @@ app.include_router(
 
 app.include_router(
     forecast_router,
-    prefix=settings.api_prefix
-)
-
-app.include_router(
-    saiki_router,
     prefix=settings.api_prefix,
     dependencies=FORECAST
+)
+
+# Saiki: solo EMPRESA (lo exige cada endpoint del controller).
+app.include_router(
+    saiki_router,
+    prefix=settings.api_prefix
 )

@@ -1,10 +1,16 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.dependencies.dependencies import require_empresa
+from app.dto.auth_dto import UsuarioActual
 from app.dto.saiki_dto import SaikiAskRequest, SaikiAskResponse
 from app.services.saiki_service import SaikiService
 
 
-router = APIRouter(prefix="/saiki", tags=["Saiki"])
+router = APIRouter(
+    prefix="/saiki",
+    tags=["Saiki"],
+    dependencies=[Depends(require_empresa)],
+)
 service = SaikiService()
 
 
@@ -13,18 +19,16 @@ async def health():
     return await service.health()
 
 
-@router.get("/system-prompt", summary="Obtener el prompt del sistema de Saiki")
-async def system_prompt():
-    return {"system_prompt": service.get_system_prompt()}
-
-
 @router.post(
     "/ask",
     response_model=SaikiAskResponse,
     summary="Resolver una consulta operacional con datos de PsiTwin",
 )
-async def ask(data: SaikiAskRequest):
-    return await service.ask(data)
+async def ask(
+    data: SaikiAskRequest,
+    user: UsuarioActual = Depends(require_empresa),
+):
+    return await service.ask(data, user)
 
 
 @router.post(
@@ -32,5 +36,8 @@ async def ask(data: SaikiAskRequest):
     response_model=SaikiAskResponse,
     summary="Alias de consulta operacional de Saiki",
 )
-async def chat(data: SaikiAskRequest):
-    return await service.ask(data)
+async def chat(
+    data: SaikiAskRequest,
+    user: UsuarioActual = Depends(require_empresa),
+):
+    return await service.ask(data, user)

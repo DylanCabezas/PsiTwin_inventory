@@ -1,3 +1,4 @@
+import asyncio
 import json
 from urllib import error, request
 
@@ -5,6 +6,7 @@ from fastapi import HTTPException, status
 
 from app.config.settings import get_settings
 from app.dto.saiki_dto import SaikiAskRequest
+from app.dto.auth_dto import UsuarioActual
 from app.prompts.saiki_system_prompt import SAIKI_SYSTEM_PROMPT
 from app.services.saiki_tools import SaikiToolRegistry
 
@@ -21,38 +23,46 @@ class SaikiService:
         return SAIKI_SYSTEM_PROMPT
 
     async def health(self) -> dict:
+        base = {
+            "ollama_base_url": self.settings.ollama_base_url,
+            "model": self.settings.ollama_model,
+        }
         try:
-            answer = self._call_ollama(
-                "Responde únicamente: conexión local disponible.",
-                timeout=15,
-            )
-            return {
-                "status": "ok",
-                "ready": bool(answer),
-                "ollama_base_url": self.settings.ollama_base_url,
-                "model": self.settings.ollama_model,
-            }
+            models = await asyncio.to_thread(self._installed_models)
         except RuntimeError as exc:
+            return {"status": "unavailable", "ready": False, **base, "detail": str(exc)}
+        if self.settings.ollama_model not in models:
             return {
                 "status": "unavailable",
                 "ready": False,
-                "ollama_base_url": self.settings.ollama_base_url,
-                "model": self.settings.ollama_model,
-                "detail": str(exc),
+                **base,
+                "detail": f"El modelo {self.settings.ollama_model} no está descargado en Ollama.",
             }
+        return {"status": "ok", "ready": True, **base}
 
-    async def ask(self, data: SaikiAskRequest) -> dict:
+    def _installed_models(self) -> list[str]:
+        url = f"{self.settings.ollama_base_url.rstrip('/')}/api/tags"
+        try:
+            with request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except (error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"No se pudo conectar con Ollama en {url}: {exc}") from exc
+        return [model.get("name", "") for model in data.get("models", [])]
+
+    async def ask(
+        self,
+        data: SaikiAskRequest,
+        user: UsuarioActual | None = None,
+    ) -> dict:
         context = dict(data.context)
-        if data.id_inventario:
-            result, _ = await self.tools.execute(
-                "get_inventory", {"id_inventario": data.id_inventario}
+        if data.id_inventario and user is not None:
+            context["inventario"] = await self._authorized_tool(
+                "get_inventory", {"id_inventario": data.id_inventario}, user
             )
-            context["inventario"] = result
-        if data.id_producto:
-            result, _ = await self.tools.execute(
-                "get_product", {"id_producto": data.id_producto}
+        if data.id_producto and user is not None:
+            context["producto"] = await self._authorized_tool(
+                "get_product", {"id_producto": data.id_producto}, user
             )
-            context["producto"] = result
 
         messages = [
             {"role": "system", "content": self.get_system_prompt()},
@@ -63,7 +73,7 @@ class SaikiService:
             },
         ]
         try:
-            answer, tool_data, sources = await self._agent_loop(messages)
+            answer, tool_data, sources = await self._agent_loop(messages, user)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except RuntimeError as exc:
@@ -84,11 +94,24 @@ class SaikiService:
             "warnings": self._warnings(sources),
         }
 
-    async def _agent_loop(self, messages: list[dict]) -> tuple[str, dict, set[str]]:
+    async def _authorized_tool(self, name, arguments, user):
+        result, _ = await self.tools.execute(name, arguments, user)
+        return result
+
+    async def _execute_tool(self, name, arguments, user=None):
+        if user is None:
+            return await self.tools.execute(name, arguments)
+        return await self.tools.execute(name, arguments, user)
+
+    async def _agent_loop(
+        self,
+        messages: list[dict],
+        user: UsuarioActual | None = None,
+    ) -> tuple[str, dict, set[str]]:
         tool_data: dict[str, object] = {}
         sources: set[str] = set()
         for _ in range(self.max_tool_iterations):
-            response = self._call_ollama_chat(messages)
+            response = await asyncio.to_thread(self._call_ollama_chat, messages)
             message = response.get("message")
             if not isinstance(message, dict):
                 raise RuntimeError("Ollama devolvió un mensaje inválido.")
@@ -102,21 +125,19 @@ class SaikiService:
             messages.append(message)
             for tool_call in tool_calls:
                 name, arguments = self._parse_tool_call(tool_call)
-                result, source = await self.tools.execute(name, arguments)
+                result, source = await self._execute_tool(name, arguments, user)
                 sources.add(source)
                 tool_data[name] = result
                 messages.append(
                     {
                         "role": "tool",
                         "tool_name": name,
-                        "content": json.dumps(
-                            result, ensure_ascii=False, default=str
-                        ),
+                        "content": json.dumps(result, ensure_ascii=False, default=str),
                     }
                 )
         raise RuntimeError("Se alcanzó el límite de consultas de Saiki.")
 
-    def _call_ollama_chat(self, messages: list[dict], timeout: int = 60) -> dict:
+    def _call_ollama_chat(self, messages: list[dict], timeout: int = 300) -> dict:
         url = f"{self.settings.ollama_base_url.rstrip('/')}/api/chat"
         payload = {
             "model": self.settings.ollama_model,
@@ -140,27 +161,11 @@ class SaikiService:
             raise RuntimeError("Ollama devolvió una respuesta inválida.")
         return result
 
-    def _call_ollama(self, prompt: str, timeout: int = 60) -> str:
-        response = self._call_ollama_chat(
-            [
-                {"role": "system", "content": self.get_system_prompt()},
-                {"role": "user", "content": prompt},
-            ],
-            timeout=timeout,
-        )
-        message = response.get("message", {})
-        answer = message.get("content") if isinstance(message, dict) else None
-        if not isinstance(answer, str) or not answer.strip():
-            raise RuntimeError("Ollama no devolvió una respuesta útil.")
-        return answer.strip()
-
     def _parse_tool_call(self, tool_call: object) -> tuple[str, dict]:
         if not isinstance(tool_call, dict):
             raise ValueError("Tool call inválida.")
         function = tool_call.get("function")
-        if not isinstance(function, dict) or not isinstance(
-            function.get("name"), str
-        ):
+        if not isinstance(function, dict) or not isinstance(function.get("name"), str):
             raise ValueError("Tool call inválida.")
         arguments = function.get("arguments", {})
         if isinstance(arguments, str):

@@ -9,6 +9,7 @@ from app.services.inventario_service import InventarioService
 from app.services.inventory_risk_service import InventoryRiskService
 from app.services.movimiento_service import MovimientoService
 from app.services.recomendacion_service import RecomendacionService
+from app.services.acceso_service import AccesoService
 
 
 class InventoryArgs(BaseModel):
@@ -100,7 +101,12 @@ class SaikiToolRegistry:
             for name, (model, _, _) in self._handlers.items()
         ]
 
-    async def execute(self, name: str, arguments: dict[str, Any]) -> tuple[Any, str]:
+    async def execute(
+        self,
+        name: str,
+        arguments: dict[str, Any],
+        user=None,
+    ) -> tuple[Any, str]:
         if name not in self._handlers:
             raise ValueError(f"Tool no autorizada: {name}")
         model, handler, source = self._handlers[name]
@@ -108,7 +114,19 @@ class SaikiToolRegistry:
             validated = model.model_validate(arguments)
         except Exception as exc:
             raise ValueError(f"Argumentos inválidos para {name}: {exc}") from exc
+        if user is not None:
+            await self._authorize(name, validated, user)
         return await handler(validated), source
+
+    async def _authorize(self, name: str, args: BaseModel, user) -> None:
+        if hasattr(args, "id_inventario") and args.id_inventario:
+            await AccesoService.verificar_inventario(user, args.id_inventario)
+        if name == "get_product" and args.id_producto:
+            await AccesoService.verificar_producto(user, args.id_producto)
+        if name in {"get_warehouse_status", "get_active_alerts", "get_recommendations"}:
+            visible = await AccesoService.ids_inventarios(user)
+            if name == "get_warehouse_status":
+                self._visible_inventory_ids = visible
 
     async def get_inventory(self, args: InventoryArgs):
         return await self.inventario_service.obtener_inventario(args.id_inventario)
@@ -129,14 +147,22 @@ class SaikiToolRegistry:
     async def get_active_alerts(self, args: OptionalInventoryArgs):
         if args.id_inventario:
             return await self.alerta_service.listar_por_inventario(args.id_inventario)
-        return await self.alerta_service.listar_activas()
+        alerts = await self.alerta_service.listar_activas()
+        visible = getattr(self, "_visible_inventory_ids", None)
+        return [item for item in alerts if visible is None or item.get("id_inventario") in visible]
 
     async def get_recommendations(self, args: OptionalInventoryArgs):
         if args.id_inventario:
             return await self.recomendacion_service.listar_por_inventario(
                 args.id_inventario
             )
-        return await self.recomendacion_service.listar()
+        recommendations = await self.recomendacion_service.listar()
+        visible = getattr(self, "_visible_inventory_ids", None)
+        return [
+            item
+            for item in recommendations
+            if visible is None or item.get("id_inventario") in visible
+        ]
 
     async def get_recent_movements(self, args: InventoryArgs):
         movements = await self.movimiento_service.obtener_por_inventario(
@@ -150,6 +176,12 @@ class SaikiToolRegistry:
 
     async def get_warehouse_status(self, args: OptionalInventoryArgs):
         inventories = await self.inventario_service.obtener_inventarios()
+        visible = getattr(self, "_visible_inventory_ids", None)
+        if visible is not None:
+            inventories = [
+                item for item in inventories
+                if item.get("id_inventario") in visible
+            ]
         return {
             "total_inventarios": len(inventories),
             "stock_total": sum(
