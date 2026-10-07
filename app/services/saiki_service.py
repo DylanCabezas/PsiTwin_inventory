@@ -1,9 +1,12 @@
+import asyncio
 import json
 from urllib import error, request
 
+from fastapi import HTTPException
+
 from app.config.settings import get_settings
 from app.prompts.saiki_system_prompt import SAIKI_SYSTEM_PROMPT
-from app.repositories.producto_repository import ProductoRepository
+from app.services.acceso_service import AccesoService
 from app.services.alerta_service import AlertaService
 from app.services.inventario_service import InventarioService
 from app.services.inventory_risk_service import InventoryRiskService
@@ -24,28 +27,35 @@ class SaikiService:
         return SAIKI_SYSTEM_PROMPT
 
     async def health(self) -> dict:
+        """Disponible = Ollama responde y tiene el modelo descargado. No genera texto (sería lento)."""
+        base = {
+            "ollama_base_url": self.settings.ollama_base_url,
+            "model": self.settings.ollama_model,
+        }
         try:
-            answer = self._call_ollama(
-                "Responde únicamente: conexión local disponible.",
-                timeout=15,
-            )
-            return {
-                "status": "ok",
-                "ready": bool(answer),
-                "ollama_base_url": self.settings.ollama_base_url,
-                "model": self.settings.ollama_model,
-            }
+            modelos = await asyncio.to_thread(self._modelos_instalados)
         except RuntimeError as exc:
+            return {"status": "unavailable", "ready": False, **base, "detail": str(exc)}
+        if self.settings.ollama_model not in modelos:
             return {
                 "status": "unavailable",
                 "ready": False,
-                "ollama_base_url": self.settings.ollama_base_url,
-                "model": self.settings.ollama_model,
-                "detail": str(exc),
+                **base,
+                "detail": f"El modelo {self.settings.ollama_model} no está descargado en Ollama.",
             }
+        return {"status": "ok", "ready": True, **base}
 
-    async def ask(self, data) -> dict:
-        context = await self._resolve_context(data)
+    def _modelos_instalados(self) -> list[str]:
+        url = f"{self.settings.ollama_base_url.rstrip('/')}/api/tags"
+        try:
+            with request.urlopen(url, timeout=5) as response:
+                data = json.loads(response.read().decode("utf-8"))
+        except (error.URLError, TimeoutError, json.JSONDecodeError) as exc:
+            raise RuntimeError(f"No se pudo conectar con Ollama en {url}: {exc}") from exc
+        return [m.get("name", "") for m in data.get("models", [])]
+
+    async def ask(self, data, user) -> dict:
+        context = await self._resolve_context(data, user)
         prompt = (
             "Usa únicamente el contexto entregado. No inventes datos. "
             "Si falta información, dilo claramente.\n\n"
@@ -54,7 +64,11 @@ class SaikiService:
             "Responde en español y separa, cuando sea útil, dato real, "
             "predicción LightGBM, riesgo calculado e interpretación."
         )
-        answer = self._call_ollama(prompt)
+        # urllib es bloqueante: en un hilo aparte para no congelar el servidor mientras el modelo responde.
+        try:
+            answer = await asyncio.to_thread(self._call_ollama, prompt)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=f"Saiki no está disponible: {exc}") from exc
         return {
             "answer": answer,
             "model": self.settings.ollama_model,
@@ -64,15 +78,16 @@ class SaikiService:
             "warnings": self._warnings(context),
         }
 
-    async def _resolve_context(self, data) -> dict:
+    async def _resolve_context(self, data, user) -> dict:
+        """Contexto solo con datos de la empresa del token (404 si el id es de otra empresa)."""
         context = dict(data.context)
 
         if data.id_inventario:
-            inventario = await self.inventario_service.obtener_inventario(data.id_inventario)
+            inventario = await AccesoService.verificar_inventario(user, data.id_inventario)
             context["inventario"] = inventario
             id_producto = inventario.get("id_producto")
             if id_producto:
-                context["producto"] = await ProductoRepository.obtener_por_id(id_producto)
+                context["producto"] = await AccesoService.verificar_producto(user, id_producto)
             riesgo = await self.risk_service.evaluar(
                 id_inventario=data.id_inventario,
                 generar_alertas=False,
@@ -85,19 +100,23 @@ class SaikiService:
                 if item.get("id_inventario") == data.id_inventario
             ]
         elif data.id_producto:
-            context["producto"] = await ProductoRepository.obtener_por_id(data.id_producto)
+            context["producto"] = await AccesoService.verificar_producto(user, data.id_producto)
         elif not context:
-            context["inventarios"] = (await self.inventario_service.obtener_inventarios())[:20]
+            propios = await AccesoService.ids_inventarios(user)
+            inventarios = await self.inventario_service.obtener_inventarios()
+            context["inventarios"] = AccesoService.filtrar(inventarios, "id_inventario", propios)[:20]
 
         return context
 
-    def _call_ollama(self, prompt: str, timeout: int = 60) -> str:
+    def _call_ollama(self, prompt: str, timeout: int = 300) -> str:
         url = f"{self.settings.ollama_base_url.rstrip('/')}/api/generate"
         payload = {
             "model": self.settings.ollama_model,
             "prompt": prompt,
             "system": self.get_system_prompt(),
             "stream": False,
+            # qwen3 razona antes de responder; con think=True el razonamiento no se mezcla en `response`.
+            "think": True,
         }
         req = request.Request(
             url,
