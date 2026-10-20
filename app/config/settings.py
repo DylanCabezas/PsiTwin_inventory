@@ -82,6 +82,25 @@ class Settings(BaseSettings):
 
 
     # ============================================================
+    # MQTT (SENSORES)
+    #
+    # Broker Mosquitto: ver infra/mosquitto/README.md.
+    # Si el broker no está, la API arranca igual y el
+    # consumidor reintenta en segundo plano.
+    # ============================================================
+
+    mqtt_enabled: bool = True
+
+    mqtt_host: str = "localhost"
+
+    mqtt_port: int = 1883
+
+    mqtt_user: str = "psitwin-backend"
+
+    mqtt_password: str = "backend-dev-123"
+
+
+    # ============================================================
     # ENV
     # ============================================================
 

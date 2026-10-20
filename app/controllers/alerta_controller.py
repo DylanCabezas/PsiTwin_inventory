@@ -1,6 +1,6 @@
-from typing import List
+from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.dependencies.dependencies import (
     require_empresa
@@ -13,6 +13,8 @@ from app.dto.auth_dto import (
 from app.dto.alerta_dto import (
     AlertaCreate,
     AlertaResponse,
+    EstadoAlerta,
+    TipoAlerta,
     AlertaEstadoUpdate
 )
 
@@ -71,11 +73,28 @@ async def crear_alerta(
     response_model=List[AlertaResponse]
 )
 async def listar(
+    tipo_alerta: Optional[TipoAlerta] = Query(default=None),
+    estado: Optional[EstadoAlerta] = Query(default=None),
+    origen: Optional[str] = Query(
+        default=None,
+        description="INVENTARIO | SENSOR"
+    ),
+    id_dispositivo: Optional[str] = Query(default=None),
     user: UsuarioActual = Depends(require_empresa)
 ):
-    return await service.listar_por_empresa(
+    alertas = await service.listar_por_empresa(
         user.id_empresa
     )
+
+    # Filtros opcionales (incluye los tipos de sensores)
+    return [
+        alerta
+        for alerta in alertas
+        if (tipo_alerta is None or alerta.get("tipo_alerta") == tipo_alerta.value)
+        and (estado is None or alerta.get("estado") == estado.value)
+        and (origen is None or alerta.get("origen", "INVENTARIO") == origen)
+        and (id_dispositivo is None or alerta.get("id_dispositivo") == id_dispositivo)
+    ]
 
 
 @router.get(
