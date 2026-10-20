@@ -109,12 +109,15 @@ class InventoryRiskResponse(BaseModel):
 
     forecast: ForecastInfo
 
-    seguridad: SeguridadInfo
+    seguridad: SeguridadInfo | None = None
 
-    riesgo: RiesgoInfo
+    riesgo: RiesgoInfo | None = None
 
     reposicion: Optional[
         ReposicionInfo
     ] = None
 
     explicacion: Optional[str] = None
+    estado: str = "DISPONIBLE"
+    advertencias: list[str] = Field(default_factory=list)
+    pronosticos: dict[int, dict] = Field(default_factory=dict)

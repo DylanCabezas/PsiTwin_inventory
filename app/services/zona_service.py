@@ -441,6 +441,9 @@ class ZonaService:
                 )
             )
 
+        from app.repositories.rack_repository import RackRepository
+        if await RackRepository.obtener_por_zona(id_zona):
+            raise HTTPException(409,"La zona tiene racks; no puede eliminarse")
         deleted = await (
             ZonaRepository.eliminar(
                 id_zona

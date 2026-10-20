@@ -1,3 +1,4 @@
+from app.services.inventario_integridad import validar_referencia
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -20,7 +21,7 @@ class AlertaService:
     def __init__(self):
         self.repository = AlertaRepository()
 
-    async def crear(
+    async def _crear(
         self,
         data: AlertaCreate
     ) -> dict:
@@ -35,7 +36,9 @@ class AlertaService:
                     data.id_inventario,
 
                 tipo_alerta=
-                    data.tipo_alerta.value
+                    data.tipo_alerta.value,
+                id_producto=data.id_producto,
+                id_detalle_inventario=data.id_detalle_inventario
             )
         )
 
@@ -94,6 +97,7 @@ class AlertaService:
 
             "id_producto":
                 data.id_producto,
+            "id_detalle_inventario": data.id_detalle_inventario,
 
             "tipo_alerta":
                 data.tipo_alerta.value,
@@ -271,11 +275,13 @@ class AlertaService:
     async def resolver_activa_por_inventario(
         self,
         id_inventario: str,
-        tipo_alerta: TipoAlerta
+        tipo_alerta: TipoAlerta,
+        id_producto: str | None = None
     ):
         alerta = await self.repository.buscar_activa(
             id_inventario,
-            tipo_alerta.value
+            tipo_alerta.value,
+            id_producto=id_producto
         )
 
         if not alerta:
@@ -287,3 +293,10 @@ class AlertaService:
                 estado=EstadoAlerta.RESUELTA
             )
         )
+    async def crear(self, data):
+        await validar_referencia(data)
+        from app.services.stock_lock import bloqueo_recurso
+        key = ":".join(("decision",data.id_inventario,data.id_producto,
+                        data.id_detalle_inventario or "general",data.tipo_alerta.value))
+        async with bloqueo_recurso(key):
+            return await self._crear(data)

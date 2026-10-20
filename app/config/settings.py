@@ -35,6 +35,10 @@ class Settings(BaseSettings):
 
     ollama_model: str = "qwen3:4b"
 
+    ollama_connect_timeout_seconds: float = 5.0
+
+    ollama_read_timeout_seconds: float = 180.0
+
 
     # ============================================================
     # SEGURIDAD

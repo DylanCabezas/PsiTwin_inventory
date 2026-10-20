@@ -30,8 +30,8 @@ from app.repositories.orden_reposicion_repository import (
     OrdenReposicionRepository
 )
 
-from app.repositories.inventario_repository import (
-    InventarioRepository
+from app.repositories.detalle_inventario_repository import (
+    DetalleInventarioRepository
 )
 
 from app.repositories.rack_repository import (
@@ -84,7 +84,7 @@ class DetalleRecepcionService:
         )
 
         self.inventario_repository = (
-            InventarioRepository()
+            DetalleInventarioRepository()
         )
 
         self.rack_repository = RackRepository()
@@ -101,7 +101,7 @@ class DetalleRecepcionService:
     # CREAR DETALLE DE RECEPCION
     # ========================================================
 
-    async def crear(
+    async def _crear(
         self,
         id_recepcion: str,
         data: DetalleRecepcionCreate,
@@ -173,12 +173,8 @@ class DetalleRecepcionService:
         # 4. VALIDAR INVENTARIO
         # ====================================================
 
-        inventario = (
-            await self.inventario_repository
-            .obtener_por_id(
-                data.id_inventario
-            )
-        )
+        inventario = await self.resolver_ubicacion(data, detalle_orden["id_producto"], user, crear=True)
+        data.id_detalle_inventario = inventario["id_detalle_inventario"]
 
         if not inventario:
 
@@ -388,8 +384,8 @@ class DetalleRecepcionService:
 
             movimiento_data = MovimientoCreate(
 
-                id_inventario=
-                    data.id_inventario,
+                id_inventario=data.id_inventario,
+                id_detalle_inventario=data.id_detalle_inventario,
 
                 id_operario=
                     recepcion[
@@ -417,12 +413,24 @@ class DetalleRecepcionService:
                 )
             )
 
-            movimiento = (
-                await self.movimiento_service
-                .crear_movimiento(
-                    movimiento_data
+            try:
+                movimiento = (
+                    await self.movimiento_service
+                    .crear_movimiento(
+                        movimiento_data
+                    )
                 )
-            )
+
+
+            except Exception:
+                # Compensación del movimiento conserva stock. No contabilizar
+                # aceptación sin ledger; dejar un detalle recuperable por evaluación.
+                await self.repository.actualizar(
+                    detalle_recepcion["id_detalle_recepcion"],
+                    {"cantidad_aceptada":0, "estado_recepcion":"EN_EVALUACION",
+                     "ubicado":False, "id_movimiento":None,
+                     "comentario_recepcion":"Entrada pendiente: falló el registro del movimiento. Resolver evaluación después de reconciliar."})
+                raise
 
             # ================================================
             # GUARDAR FK DEL MOVIMIENTO GENERADO
@@ -452,7 +460,7 @@ class DetalleRecepcionService:
 
         return detalle_recepcion
 
-    async def resolver_evaluacion(
+    async def _resolver_evaluacion(
         self,
         id_detalle_recepcion: str,
         data,
@@ -511,13 +519,25 @@ class DetalleRecepcionService:
                 detail="Recepción no encontrada"
             )
 
-        id_inventario = (
-            data.id_inventario
-            or detalle.get("id_inventario")
-        )
-        inventario = await self.inventario_repository.obtener_por_id(
-            id_inventario
-        )
+        from app.database.mongodb import get_database
+        order_ref = await self.orden_repository.obtener_por_id(recepcion["id_orden_reposicion"])
+        operator_ref = await get_database()["operarios"].find_one({"id_operario":data.id_operario},{"_id":0})
+        if not order_ref or not operator_ref or operator_ref.get("estado") != "ACTIVO":
+            raise HTTPException(409,"Operario activo y orden requeridos para resolver")
+        if operator_ref.get("id_empresa") != order_ref["id_empresa"] or operator_ref.get("id_almacen") != order_ref["id_almacen"]:
+            raise HTTPException(403,"El operario no pertenece al almacén de la orden")
+
+        from types import SimpleNamespace
+        linea = await self.detalle_reposicion_repository.obtener_por_id(detalle["id_detalle_reposicion"])
+        if not linea:
+            raise HTTPException(404, "Detalle de reposición no encontrado")
+        location = SimpleNamespace(
+            id_inventario=data.id_inventario or detalle["id_inventario"],
+            id_detalle_inventario=data.id_detalle_inventario or (None if data.id_rack else detalle.get("id_detalle_inventario")),
+            id_rack=data.id_rack, stock_minimo=data.stock_minimo, stock_maximo=data.stock_maximo)
+        inventario = await self.resolver_ubicacion(location, linea["id_producto"], user, crear=True)
+        id_inventario = inventario["id_inventario"]
+        id_detalle_inventario = inventario["id_detalle_inventario"]
 
         if not inventario:
             raise HTTPException(
@@ -561,8 +581,14 @@ class DetalleRecepcionService:
                 detail="Las cantidades aceptada y rechazada no coinciden con la recibida"
             )
 
+        anteriores = await self.repository.obtener_por_detalle_reposicion(detalle["id_detalle_reposicion"])
+        aceptado_otros = sum(item.get("cantidad_aceptada", 0) for item in anteriores
+                             if item["id_detalle_recepcion"] != id_detalle_recepcion)
+        if aceptado_otros + aceptada > linea["cantidad_solicitada"]:
+            raise HTTPException(409, "La cantidad aceptada supera la pendiente de la orden")
+
         riesgo_antes = await self._obtener_riesgo(
-            id_inventario
+            id_detalle_inventario
         )
 
         if aceptada <= 0:
@@ -570,6 +596,7 @@ class DetalleRecepcionService:
                 id_detalle_recepcion,
                 {
                     "id_inventario": id_inventario,
+                    "id_detalle_inventario": id_detalle_inventario,
                     "id_rack": inventario["id_rack"],
                     "cantidad_aceptada": 0,
                     "cantidad_rechazada": rechazada,
@@ -584,7 +611,7 @@ class DetalleRecepcionService:
                 recepcion["id_orden_reposicion"]
             )
             riesgo_despues = await self._obtener_riesgo(
-                id_inventario
+                id_detalle_inventario
             )
             return await self._notificar_cierre(
                 recepcion,
@@ -605,6 +632,7 @@ class DetalleRecepcionService:
         movimiento = await self.movimiento_service.crear_movimiento(
             MovimientoCreate(
                 id_inventario=id_inventario,
+                id_detalle_inventario=id_detalle_inventario,
                 id_operario=data.id_operario,
                 id_detalle_recepcion=id_detalle_recepcion,
                 tipo_movimiento=TipoMovimiento.ENTRADA,
@@ -618,6 +646,7 @@ class DetalleRecepcionService:
             id_detalle_recepcion,
             {
                 "id_inventario": id_inventario,
+                    "id_detalle_inventario": id_detalle_inventario,
                 "id_rack": inventario["id_rack"],
                 "cantidad_aceptada": aceptada,
                 "cantidad_rechazada": rechazada,
@@ -635,7 +664,7 @@ class DetalleRecepcionService:
         )
 
         riesgo_despues = await self._obtener_riesgo(
-            id_inventario
+            id_detalle_inventario
         )
         return await self._notificar_cierre(
             recepcion,
@@ -644,15 +673,12 @@ class DetalleRecepcionService:
             riesgo_despues
         )
 
-    async def _obtener_riesgo(self, id_inventario):
+    async def _obtener_riesgo(self, id_detalle_inventario):
         try:
-            from app.services.inventory_risk_service import (
-                InventoryRiskService
-            )
-            return await InventoryRiskService().evaluar(
-                id_inventario,
-                generar_alertas=False
-            )
+            from app.services.inventory_risk_service import InventoryRiskService
+            detalle = await self.inventario_repository.obtener_por_id(id_detalle_inventario)
+            return await InventoryRiskService().evaluar(detalle["id_inventario"],
+                generar_alertas=False, id_producto=detalle["id_producto"])
         except Exception:
             return None
 
@@ -665,11 +691,11 @@ class DetalleRecepcionService:
     ):
         antes = (
             riesgo_antes.riesgo.nivel.value
-            if riesgo_antes else "NO_DISPONIBLE"
+            if riesgo_antes and riesgo_antes.riesgo else "NO_DISPONIBLE"
         )
         despues = (
             riesgo_despues.riesgo.nivel.value
-            if riesgo_despues else "NO_DISPONIBLE"
+            if riesgo_despues and riesgo_despues.riesgo else "NO_DISPONIBLE"
         )
         notificacion = await (
             self.notification_service
@@ -829,3 +855,74 @@ class DetalleRecepcionService:
                 id_recepcion
             )
         )
+    async def resolver_ubicacion(self, data, id_producto, user=None, crear=False):
+        from app.repositories.inventario_repository import InventarioRepository
+        from app.repositories.almacen_repository import AlmacenRepository
+        from app.services.acceso_service import AccesoService
+        from app.dto.detalle_inventario_dto import DetalleInventarioCreate
+        from app.services.detalle_inventario_service import DetalleInventarioService
+        header = await InventarioRepository().obtener_por_id(data.id_inventario)
+        if not header:
+            raise HTTPException(404, "Inventario general no encontrado")
+        if user:
+            await AccesoService.verificar_inventario(user, data.id_inventario)
+        almacen = await AlmacenRepository.obtener_por_id(header["id_almacen"])
+        producto = await ProductoRepository.obtener_por_id(id_producto)
+        if not almacen or not producto or producto["id_empresa"] != almacen["id_empresa"]:
+            raise HTTPException(409, "Producto incompatible con almacén")
+        detail_id = getattr(data, "id_detalle_inventario", None)
+        rack_id = getattr(data, "id_rack", None)
+        if detail_id:
+            detalle = await self.inventario_repository.obtener_por_id(detail_id)
+            if not detalle or detalle["id_inventario"] != data.id_inventario or detalle["id_producto"] != id_producto:
+                raise HTTPException(409, "Detalle incompatible con inventario/producto")
+            if rack_id and rack_id != detalle["id_rack"]:
+                raise HTTPException(409, "El rack no coincide con el detalle")
+            rack_id = detalle["id_rack"]
+        else:
+            if not rack_id:
+                raise HTTPException(422, "Indique id_detalle_inventario o id_rack")
+            detalle = await self.inventario_repository.obtener_combinacion(data.id_inventario, id_producto, rack_id)
+        rack = await self.rack_repository.obtener_por_id(rack_id)
+        zona = await self.zona_repository.obtener_por_id(rack["id_zona"]) if rack else None
+        if not zona or zona["id_almacen"] != header["id_almacen"]:
+            raise HTTPException(409, "El rack no pertenece al almacén del inventario")
+        if user:
+            await AccesoService.verificar_rack(user, rack_id)
+        if detalle:
+            return detalle
+        maximum = getattr(data, "stock_maximo", None)
+        if maximum is None:
+            raise HTTPException(422, "stock_maximo es obligatorio para una nueva ubicación")
+        request = DetalleInventarioCreate(id_inventario=data.id_inventario,
+            id_producto=id_producto, id_rack=rack_id, stock_actual=0,
+            stock_minimo=getattr(data, "stock_minimo", 0), stock_maximo=maximum)
+        await RackService.validar_asignacion(rack, producto, 0)
+        if not crear:
+            return {**request.model_dump(), "id_detalle_inventario": None}
+        try:
+            return await DetalleInventarioService().crear_inventario(request, user.id_operario if user else None)
+        except HTTPException as exc:
+            if exc.status_code != 409:
+                raise
+            concurrent = await self.inventario_repository.obtener_combinacion(data.id_inventario, id_producto, rack_id)
+            if not concurrent:
+                raise
+            return concurrent
+
+    async def crear(self, id_recepcion, data, user=None):
+        from app.services.stock_lock import bloqueo_orden
+        recepcion = await self.recepcion_repository.obtener_por_id(id_recepcion)
+        if not recepcion:
+            raise HTTPException(404, "Recepción no encontrada")
+        async with bloqueo_orden(recepcion["id_orden_reposicion"]):
+            return await self._crear(id_recepcion,data,user)
+
+    async def resolver_evaluacion(self, id_detalle_recepcion, data, user=None):
+        from app.services.stock_lock import bloqueo_orden
+        detalle = await self.repository.obtener_por_id(id_detalle_recepcion)
+        recepcion = await self.recepcion_repository.obtener_por_id(detalle["id_recepcion"]) if detalle else None
+        if not recepcion:
+            raise HTTPException(404, "Recepción no encontrada")
+        async with bloqueo_orden(recepcion["id_orden_reposicion"]):
+            return await self._resolver_evaluacion(id_detalle_recepcion,data,user)

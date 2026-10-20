@@ -101,59 +101,13 @@ class InventoryRiskRepository:
     # OBTENER INVENTARIO
     # ============================================================
 
-    async def obtener_inventario(
-        self,
-        id_inventario: str
-    ) -> Optional[dict]:
+    async def obtener_inventario(self, id_inventario):
+        from app.repositories.inventario_repository import InventarioRepository
+        return await InventarioRepository().obtener_por_id(id_inventario)
 
-        return await (
-            self.inventarios_collection()
-            .find_one(
-                {
-                    "$or": [
-                        {
-                            "id_inventario":
-                                id_inventario
-                        },
-                        {
-                            "id":
-                                id_inventario
-                        }
-                    ]
-                },
-                {
-                    "_id": 0
-                }
-            )
-        )
-
-
-    # ============================================================
-    # LISTAR INVENTARIOS
-    # ============================================================
-
-    async def listar_inventarios(
-        self
-    ) -> List[dict]:
-
-        cursor = (
-            self.inventarios_collection()
-            .find(
-                {},
-                {
-                    "_id": 0
-                }
-            )
-        )
-
-        return await cursor.to_list(
-            length=None
-        )
-
-
-    # ============================================================
-    # OBTENER PRODUCTO
-    # ============================================================
+    async def listar_inventarios(self):
+        from app.repositories.inventario_repository import InventarioRepository
+        return await InventarioRepository().obtener_todos()
 
     async def obtener_producto(
         self,
@@ -289,7 +243,8 @@ class InventoryRiskRepository:
     async def obtener_salidas_desde(
         self,
         id_inventario: str,
-        fecha_desde: datetime
+        fecha_desde: datetime,
+        id_producto: str
     ) -> List[dict]:
 
         cursor = (

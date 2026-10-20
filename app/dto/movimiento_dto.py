@@ -24,6 +24,7 @@ class MotivoMovimiento(str, Enum):
 
 class MovimientoCreate(BaseModel):
     id_inventario: str
+    id_detalle_inventario: str
 
     # Se fuerza al operario del token (puede omitirse).
     id_operario: Optional[str] = None
@@ -44,8 +45,10 @@ class MovimientoCreate(BaseModel):
 
 class MovimientoResponse(BaseModel):
     id_movimiento: str
+    id_almacen: str
 
     id_inventario: str
+    id_detalle_inventario: str
     id_detalle_recepcion: Optional[str] = None
     id_producto: str
     id_rack: str

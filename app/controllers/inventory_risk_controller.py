@@ -83,6 +83,7 @@ async def evaluar_todos(
 )
 async def evaluar_inventario(
     id_inventario: str,
+    id_producto: str = Query(...),
     generar_alertas: bool = Query(
         default=True,
         description=(
@@ -102,9 +103,11 @@ async def evaluar_inventario(
         id_inventario
     )
 
+    await AccesoService.verificar_producto(user, id_producto)
     return await service.evaluar(
         id_inventario=
             id_inventario,
+        id_producto=id_producto,
         generar_alertas=
             generar_alertas
     )

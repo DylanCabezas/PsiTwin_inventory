@@ -10,8 +10,8 @@ from app.repositories.movimiento_repository import (
     MovimientoRepository
 )
 
-from app.repositories.inventario_repository import (
-    InventarioRepository
+from app.repositories.detalle_inventario_repository import (
+    DetalleInventarioRepository
 )
 
 from app.repositories.operario_repository import (
@@ -42,7 +42,7 @@ class MovimientoService:
         self.repository = MovimientoRepository()
 
         self.inventario_repository = (
-            InventarioRepository()
+            DetalleInventarioRepository()
         )
 
         self.operario_repository = (
@@ -120,7 +120,7 @@ class MovimientoService:
     # CREAR MOVIMIENTO
     # ========================================================
 
-    async def crear_movimiento(
+    async def _crear_movimiento(
         self,
         data: MovimientoCreate,
         user: UsuarioActual | None = None
@@ -134,6 +134,8 @@ class MovimientoService:
                 )
             )
             if existente:
+                if existente["id_inventario"] != data.id_inventario or existente["id_detalle_inventario"] != data.id_detalle_inventario:
+                    raise HTTPException(409,"El movimiento de recepción pertenece a otra ubicación")
                 return existente
 
         # ----------------------------------------------------
@@ -161,7 +163,7 @@ class MovimientoService:
 
         inventario = (
             await self.inventario_repository.obtener_por_id(
-                data.id_inventario
+                data.id_detalle_inventario
             )
         )
 
@@ -228,6 +230,21 @@ class MovimientoService:
         # ----------------------------------------------------
         # 5. Obtener stock actual
         # ----------------------------------------------------
+
+        from app.repositories.inventario_repository import InventarioRepository
+        from app.repositories.almacen_repository import AlmacenRepository
+        from app.repositories.zona_repository import ZonaRepository
+        if inventario["id_inventario"] != data.id_inventario:
+            raise HTTPException(400, "El detalle no pertenece al inventario general indicado")
+        header = await InventarioRepository().obtener_por_id(data.id_inventario)
+        almacen = await AlmacenRepository.obtener_por_id(header["id_almacen"]) if header else None
+        rack_ref = await RackRepository.obtener_por_id(inventario["id_rack"])
+        zona = await ZonaRepository.obtener_por_id(rack_ref["id_zona"]) if rack_ref else None
+        producto_ref = await ProductoRepository.obtener_por_id(inventario["id_producto"])
+        if not almacen or not zona or zona["id_almacen"] != header["id_almacen"] or not producto_ref or producto_ref["id_empresa"] != almacen["id_empresa"]:
+            raise HTTPException(409, "Referencias de ubicación/producto incompatibles")
+        if operario.get("id_empresa") != almacen["id_empresa"] or operario.get("id_almacen") != header["id_almacen"]:
+            raise HTTPException(403, "El operario no pertenece al almacén del detalle")
 
         stock_anterior = inventario[
             "stock_actual"
@@ -355,7 +372,7 @@ class MovimientoService:
                 rack,
                 producto or {},
                 incremento,
-                exigir_disponible=False
+                exigir_disponible=(data.id_detalle_recepcion is not None)
             )
 
         # ----------------------------------------------------
@@ -365,7 +382,7 @@ class MovimientoService:
         actualizado = await (
             self.inventario_repository
             .actualizar_stock_condicional(
-                data.id_inventario,
+                data.id_detalle_inventario,
                 stock_anterior,
                 stock_nuevo
             )
@@ -385,8 +402,9 @@ class MovimientoService:
         # ----------------------------------------------------
 
         movimiento_dict = {
-            "id_inventario":
-                data.id_inventario,
+            "id_inventario": data.id_inventario,
+            "id_detalle_inventario": data.id_detalle_inventario,
+            "id_almacen": header["id_almacen"],
 
             "id_producto":
                 inventario["id_producto"],
@@ -429,7 +447,7 @@ class MovimientoService:
             await (
                 self.inventario_repository
                 .actualizar_stock_condicional(
-                    data.id_inventario,
+                    data.id_detalle_inventario,
                     stock_nuevo,
                     stock_anterior
                 )
@@ -606,3 +624,12 @@ class MovimientoService:
                 motivo_movimiento.value
             )
         )
+    async def crear_movimiento(self, data, user=None):
+        from app.services.stock_lock import bloqueo_rack
+        detalle = await self.inventario_repository.obtener_por_id(data.id_detalle_inventario)
+        if not detalle:
+            raise HTTPException(404, "Detalle de inventario no encontrado")
+        if detalle["id_inventario"] != data.id_inventario:
+            raise HTTPException(400, "El detalle no pertenece al inventario indicado")
+        async with bloqueo_rack(detalle["id_rack"]):
+            return await self._crear_movimiento(data, user)

@@ -285,7 +285,9 @@ class RecomendacionRepository:
     async def buscar_pendiente(
         self,
         id_inventario: str,
-        tipo_recomendacion: str
+        tipo_recomendacion: str,
+        id_producto: str | None = None,
+        id_detalle_inventario: str | None = None
     ) -> Optional[dict]:
 
         return await self.collection().find_one(
@@ -293,6 +295,8 @@ class RecomendacionRepository:
                 "id_inventario":
                     id_inventario,
 
+                "id_producto": id_producto,
+                "id_detalle_inventario": id_detalle_inventario,
                 "tipo_recomendacion":
                     tipo_recomendacion,
 

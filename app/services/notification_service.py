@@ -184,12 +184,10 @@ class NotificationService:
             recomendacion["id_producto"],
             "id_producto",
         )
-        inventario = await self._find(
-            database,
-            "inventarios",
-            recomendacion["id_inventario"],
-            "id_inventario",
-        )
+        detalles = await database["detalles_inventario"].find(
+            {"id_inventario": recomendacion["id_inventario"], "id_producto": recomendacion["id_producto"]},
+            {"_id": 0}).to_list(length=None)
+        inventario = {"stock_actual": sum(d["stock_actual"] for d in detalles)}
         operario = (
             await self._find(database, "operarios", id_operario, "id_operario")
             if id_operario
@@ -239,8 +237,6 @@ class NotificationService:
                 f"Producto: {nombre_producto}",
                 f"Inventario: {recomendacion['id_inventario']}",
                 f"Stock actual: {(inventario or {}).get('stock_actual', 'N/D')}",
-                f"Stock minimo: {(inventario or {}).get('stock_minimo', 'N/D')}",
-                f"Stock maximo: {(inventario or {}).get('stock_maximo', 'N/D')}",
                 f"Nivel de riesgo: {recomendacion['nivel_riesgo']}",
                 f"Forecast 7 dias: {recomendacion.get('forecast_7d', 'N/D')}",
                 f"Cantidad minima: {recomendacion.get('cantidad_minima', 'N/D')}",
@@ -457,12 +453,8 @@ class NotificationService:
             {"id_detalle_reposicion": detalle["id_detalle_reposicion"]},
             {"_id": 0},
         )
-        inventario = await self._find(
-            database,
-            "inventarios",
-            detalle.get("id_inventario"),
-            "id_inventario",
-        )
+        inventario = await self._find(database, "detalles_inventario",
+            detalle.get("id_detalle_inventario"), "id_detalle_inventario")
         subject = f"[PsiTwin] Reposicion completada - {(empresa or {}).get('nombre', 'Empresa')}"
         recipient = (empresa or {}).get("correo")
         event_id = f"CIERRE:{id_detalle_recepcion}"

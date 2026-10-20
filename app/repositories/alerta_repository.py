@@ -284,7 +284,9 @@ class AlertaRepository:
     async def buscar_activa(
         self,
         id_inventario: str,
-        tipo_alerta: str
+        tipo_alerta: str,
+        id_producto: str | None = None,
+        id_detalle_inventario: str | None = None
     ) -> Optional[dict]:
 
         return await self.collection().find_one(
@@ -292,6 +294,8 @@ class AlertaRepository:
                 "id_inventario":
                     id_inventario,
 
+                "id_producto": id_producto,
+                "id_detalle_inventario": id_detalle_inventario,
                 "tipo_alerta":
                     tipo_alerta,
 

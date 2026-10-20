@@ -128,11 +128,15 @@ class AlmacenService:
                 now
         }
 
-        return await (
-            AlmacenRepository.crear(
-                almacen
-            )
-        )
+        from app.repositories.inventario_repository import InventarioRepository
+        created = await AlmacenRepository.crear(almacen)
+        try:
+            await InventarioRepository().garantizar(created["id"])
+        except Exception:
+            # No successful warehouse creation without its inventory header.
+            await AlmacenRepository.eliminar(created["id"])
+            raise
+        return created
 
 
     # ============================================================
@@ -299,6 +303,15 @@ class AlmacenService:
                 )
             )
 
+        from app.database.mongodb import get_database
+        from app.repositories.inventario_repository import InventarioRepository
+        db = get_database()
+        header = await InventarioRepository().obtener_por_almacen(id_almacen)
+        for collection in ("zonas","operarios","ordenes_reposicion","movimientos","inventario_historial"):
+            if await db[collection].find_one({"id_almacen":id_almacen},{"_id":1}):
+                raise HTTPException(409,"El almacén tiene estructura, operaciones o auditoría asociada")
+        if header and await db["detalles_inventario"].find_one({"id_inventario":header["id_inventario"]},{"_id":1}):
+            raise HTTPException(409,"El almacén tiene detalles de inventario")
         deleted = await (
             AlmacenRepository.eliminar(
                 id_almacen
@@ -317,6 +330,8 @@ class AlmacenService:
                 )
             )
 
+        if header:
+            await db["inventarios"].delete_one({"id_inventario":header["id_inventario"]})
         return {
             "mensaje":
                 "Almacén eliminado correctamente"

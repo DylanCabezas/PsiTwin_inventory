@@ -162,7 +162,7 @@ app = FastAPI(
         settings.app_name,
 
     version=
-        "1.2.0",
+        "2.0.0",
 
     description=(
         "API de gestión inteligente de inventario, "
@@ -284,7 +284,7 @@ async def root():
             "PsiTwin Inventory API funcionando",
 
         "version":
-            "1.2.0",
+            "2.0.0",
 
         "modulos": [
 
@@ -294,6 +294,7 @@ async def root():
             "Rack",
             "Producto",
             "Inventario",
+            "DetalleInventario",
             "Operario",
             "Movimiento",
 
@@ -357,7 +358,7 @@ async def health():
                 settings.mongodb_database,
 
             "version":
-                "1.2.0"
+                "2.0.0"
         }
 
     except Exception as exc:
@@ -377,7 +378,7 @@ async def health():
                 str(exc),
 
             "version":
-                "1.2.0"
+                "2.0.0"
         }
 
 
@@ -637,3 +638,6 @@ app.include_router(
     saiki_router,
     prefix=settings.api_prefix
 )
+
+from app.controllers.detalle_inventario_controller import router as detalle_inventario_router
+app.include_router(detalle_inventario_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)

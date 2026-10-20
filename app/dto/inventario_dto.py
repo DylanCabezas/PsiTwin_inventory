@@ -1,111 +1,32 @@
 from datetime import datetime
-from typing import Optional
+from pydantic import BaseModel, ConfigDict
 
-from pydantic import (
-    BaseModel,
-    Field,
-    model_validator
-)
-
-
-# ============================================================
-# CREAR INVENTARIO
-# ============================================================
 
 class InventarioCreate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id_almacen: str
 
-    id_producto: str
-
-    id_rack: str
-
-    stock_actual: int = Field(
-        ...,
-        ge=0
-    )
-
-    stock_minimo: int = Field(
-        default=0,
-        ge=0
-    )
-
-    stock_maximo: int = Field(
-        ...,
-        ge=0
-    )
-
-    @model_validator(mode="after")
-    def validar_stocks(self):
-
-        if self.stock_minimo > self.stock_maximo:
-
-            raise ValueError(
-                "El stock mínimo no puede ser mayor "
-                "que el stock máximo"
-            )
-
-        return self
-
-
-# ============================================================
-# ACTUALIZAR INVENTARIO
-# ============================================================
-
-class InventarioUpdate(BaseModel):
-
-    # Solo límites: el stock cambia únicamente por
-    # movimientos y recepciones; el rack no se cambia.
-
-    stock_minimo: Optional[int] = Field(
-        default=None,
-        ge=0
-    )
-
-    stock_maximo: Optional[int] = Field(
-        default=None,
-        ge=0
-    )
-
-
-# ============================================================
-# RESPONSE
-# ============================================================
 
 class InventarioResponse(BaseModel):
-
     id_inventario: str
-
-    id_producto: str
-
-    id_rack: str
-
-    stock_actual: int
-
-    stock_minimo: int
-
-    stock_maximo: int
-
+    id_almacen: str
     fecha_creacion: datetime
-
     fecha_actualizacion: datetime
 
 
-# ============================================================
-# HISTORIAL DE CAMBIOS
-#
-# GET /inventarios/{id}/historial
-# ============================================================
-
 class InventarioHistorialResponse(BaseModel):
-
+    id_movimiento: str | None = None
+    id_inventario: str
+    id_detalle_inventario: str | None = None
+    id_almacen: str | None = None
+    id_producto: str | None = None
+    id_rack: str | None = None
     fecha: datetime
-
-    id_operario: Optional[str] = None
-
-    operario_nombre: Optional[str] = None
-
-    # CREAR | EDITAR_LIMITES
+    id_operario: str | None = None
+    operario_nombre: str | None = None
     accion: str
-
-    antes: Optional[dict] = None
-
-    despues: Optional[dict] = None
+    antes: dict | None = None
+    despues: dict | None = None
+    cantidad: int | None = None
+    stock_anterior: int | None = None
+    stock_nuevo: int | None = None

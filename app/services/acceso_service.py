@@ -238,27 +238,15 @@ class AccesoService:
         user: UsuarioActual
     ) -> Set[str]:
 
-        ids_rack = await (
-            AccesoService.ids_racks(
-                user
-            )
-        )
+        headers = await InventarioRepository().obtener_por_almacenes(
+            await AccesoService.ids_almacenes(user))
+        return {row["id_inventario"] for row in headers}
 
-        if not ids_rack:
-            return set()
-
-        inventarios = await (
-            InventarioRepository()
-            .obtener_por_racks(
-                list(ids_rack)
-            )
-        )
-
-        return {
-            inventario["id_inventario"]
-            for inventario in inventarios
-        }
-
+    @staticmethod
+    async def ids_detalles_inventario(user):
+        from app.repositories.detalle_inventario_repository import DetalleInventarioRepository
+        rows = await DetalleInventarioRepository().obtener_por_racks(await AccesoService.ids_racks(user))
+        return {row["id_detalle_inventario"] for row in rows}
 
     # ============================================================
     # FILTROS DE LISTAS
@@ -465,40 +453,22 @@ class AccesoService:
         id_inventario: str
     ) -> Dict[str, Any]:
 
-        inventario = await (
-            InventarioRepository()
-            .obtener_por_id(
-                id_inventario
-            )
-        )
-
+        inventario = await InventarioRepository().obtener_por_id(id_inventario)
         if not inventario:
-
-            raise _no_encontrado(
-                "Inventario no encontrado"
-            )
-
-        try:
-
-            await AccesoService.verificar_rack(
-                user,
-                inventario.get("id_rack")
-            )
-
-        except HTTPException as exc:
-
-            if exc.status_code == 404:
-
-                raise _no_encontrado(
-                    "Inventario no encontrado"
-                )
-
-            raise _prohibido(
-                "No tiene acceso a este inventario"
-            )
-
+            raise _no_encontrado("Inventario general no encontrado")
+        await AccesoService.verificar_almacen(user, inventario["id_almacen"])
         return inventario
 
+    @staticmethod
+    async def verificar_detalle_inventario(user, id_detalle_inventario):
+        from app.repositories.detalle_inventario_repository import DetalleInventarioRepository
+        detalle = await DetalleInventarioRepository().obtener_por_id(id_detalle_inventario)
+        if not detalle:
+            raise _no_encontrado("Detalle de inventario no encontrado")
+        await AccesoService.verificar_inventario(user, detalle["id_inventario"])
+        await AccesoService.verificar_rack(user, detalle["id_rack"])
+        await AccesoService.verificar_producto(user, detalle["id_producto"])
+        return detalle
 
     # ============================================================
     # PRODUCTO

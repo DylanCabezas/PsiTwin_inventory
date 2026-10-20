@@ -121,127 +121,16 @@ class ProductoRepository:
     # ============================================================
 
     @staticmethod
-    async def obtener_por_almacen(
-        id_almacen: str
-    ):
-
-        database = get_database()
-
-
-        # ========================================================
-        # 1. ZONAS DEL ALMACEN
-        # ========================================================
-
-        zonas = await (
-            database["zonas"]
-            .find(
-                {
-                    "id_almacen":
-                        id_almacen
-                },
-                {
-                    "_id": 0
-                }
-            )
-            .to_list(
-                length=None
-            )
-        )
-
-
-        ids_zonas = []
-
-        for zona in zonas:
-
-            id_zona = (
-                zona.get("id")
-                or
-                zona.get("id_zona")
-            )
-
-            if id_zona:
-
-                ids_zonas.append(
-                    id_zona
-                )
-
-
-        if not ids_zonas:
-
+    async def obtener_por_almacen(id_almacen: str):
+        from app.repositories.inventario_repository import InventarioRepository
+        from app.repositories.detalle_inventario_repository import DetalleInventarioRepository
+        header = await InventarioRepository().obtener_por_almacen(id_almacen)
+        if not header:
             return []
-
-
-        # ========================================================
-        # 2. RACKS DE LAS ZONAS
-        # ========================================================
-
-        racks = await (
-            database["racks"]
-            .find(
-                {
-                    "id_zona": {
-                        "$in":
-                            ids_zonas
-                    }
-                },
-                {
-                    "_id": 0
-                }
-            )
-            .to_list(
-                length=None
-            )
-        )
-
-
-        ids_racks = []
-
-        for rack in racks:
-
-            id_rack = (
-                rack.get("id")
-                or
-                rack.get("id_rack")
-            )
-
-            if id_rack:
-
-                ids_racks.append(
-                    id_rack
-                )
-
-
-        if not ids_racks:
-
-            return []
-
-
-        # ========================================================
-        # 3. PRODUCTOS QUE ESTAN EN ESOS RACKS
-        # ========================================================
-
-        productos = await (
-            ProductoRepository
-            .collection()
-            .find(
-                {
-                    "id_rack": {
-                        "$in":
-                            ids_racks
-                    }
-                },
-                {
-                    "_id": 0
-                }
-            )
-            .to_list(
-                length=None
-            )
-        )
-
-
-        return productos
-
+        details = await DetalleInventarioRepository().obtener_por_inventario(header["id_inventario"])
+        product_ids = sorted({row["id_producto"] for row in details})
+        return await ProductoRepository.collection().find(
+            {"id_producto":{"$in":product_ids}},{"_id":0}).to_list(length=None)
 
     @staticmethod
     async def obtener_por_categoria(

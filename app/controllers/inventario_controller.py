@@ -1,342 +1,67 @@
-from fastapi import (
-    APIRouter,
-    Depends,
-    status
-)
+from fastapi import APIRouter, Depends
+from app.dependencies.dependencies import require_empresa_u_operario
+from app.dto.auth_dto import UsuarioActual
+from app.dto.inventario_dto import InventarioCreate, InventarioResponse, InventarioHistorialResponse
+from app.dto.detalle_inventario_dto import DetalleInventarioResponse
+from app.services.acceso_service import AccesoService
+from app.services.inventario_service import InventarioService
+from app.repositories.inventario_repository import InventarioRepository
 
-from app.dependencies.dependencies import (
-    require_empresa_u_operario,
-    require_operario
-)
-
-from app.dto.auth_dto import (
-    UsuarioActual
-)
-
-from app.dto.inventario_dto import (
-    InventarioCreate,
-    InventarioUpdate,
-    InventarioResponse,
-    InventarioHistorialResponse
-)
-
-from app.services.acceso_service import (
-    AccesoService
-)
-
-from app.services.inventario_service import (
-    InventarioService
-)
-
-
-router = APIRouter(
-    prefix="/inventarios",
-    tags=["Inventario"]
-)
-
-
+router = APIRouter(prefix="/inventarios", tags=["Inventario general"])
 service = InventarioService()
 
+@router.post("", response_model=InventarioResponse)
+async def garantizar(data: InventarioCreate, user: UsuarioActual = Depends(require_empresa_u_operario)):
+    await AccesoService.verificar_almacen(user, data.id_almacen)
+    return await service.crear_inventario(data)
 
-async def _filtrar_alcance(
-    user: UsuarioActual,
-    inventarios: list
-) -> list:
+@router.get("", response_model=list[InventarioResponse])
+async def listar(user: UsuarioActual = Depends(require_empresa_u_operario)):
+    return await InventarioRepository().obtener_por_almacenes(await AccesoService.ids_almacenes(user))
 
-    return AccesoService.filtrar(
-        inventarios,
-        "id_rack",
-        await AccesoService.ids_racks(
-            user
-        )
-    )
+@router.get("/almacen/{id_almacen}", response_model=InventarioResponse)
+async def por_almacen(id_almacen: str, user: UsuarioActual = Depends(require_empresa_u_operario)):
+    from fastapi import HTTPException
+    await AccesoService.verificar_almacen(user, id_almacen)
+    header = await InventarioRepository().obtener_por_almacen(id_almacen)
+    if not header:
+        raise HTTPException(404, "Inventario general no encontrado; garantizarlo con POST /inventarios")
+    return header
 
+@router.get("/{id_inventario}/detalles", response_model=list[DetalleInventarioResponse])
+async def detalles(id_inventario: str, id_producto: str | None = None,
+                   id_rack: str | None = None, id_zona: str | None = None,
+                   user: UsuarioActual = Depends(require_empresa_u_operario)):
+    await AccesoService.verificar_inventario(user, id_inventario)
+    if id_producto:
+        await AccesoService.verificar_producto(user, id_producto)
+    if id_rack:
+        await AccesoService.verificar_rack(user, id_rack)
+    if id_zona:
+        await AccesoService.verificar_zona(user, id_zona)
+    return await service.detalles_inventario(id_inventario, id_producto, id_rack, id_zona)
 
-# =============================================================
-# CREAR INVENTARIO (OPERARIO, racks de su almacén)
-#
-# EMPRESA: solo lectura.
-# =============================================================
+@router.get("/{id_inventario}/productos")
+async def productos(id_inventario: str, user: UsuarioActual = Depends(require_empresa_u_operario)):
+    await AccesoService.verificar_inventario(user, id_inventario)
+    return await service.stock_por_producto(id_inventario)
 
-@router.post(
-    "",
-    response_model=InventarioResponse,
-    status_code=status.HTTP_201_CREATED
-)
-async def crear_inventario(
-    data: InventarioCreate,
-    user: UsuarioActual = Depends(
-        require_operario
-    )
-):
+@router.get("/{id_inventario}/productos/{id_producto}")
+async def distribucion(id_inventario: str, id_producto: str,
+                       user: UsuarioActual = Depends(require_empresa_u_operario)):
+    from fastapi import HTTPException
+    await AccesoService.verificar_inventario(user, id_inventario)
+    await AccesoService.verificar_producto(user, id_producto)
+    items = await service.stock_por_producto(id_inventario)
+    return next((i for i in items if i["id_producto"] == id_producto),
+                {"id_inventario": id_inventario, "id_producto": id_producto,
+                 "stock_actual": 0, "stock_minimo": 0, "stock_maximo": 0, "distribucion": []})
 
-    await AccesoService.verificar_rack(
-        user,
-        data.id_rack
-    )
+@router.get("/{id_inventario}/historial", response_model=list[InventarioHistorialResponse])
+async def historial(id_inventario: str, user: UsuarioActual = Depends(require_empresa_u_operario)):
+    await AccesoService.verificar_inventario(user, id_inventario)
+    return await service.obtener_historial(id_inventario)
 
-    await AccesoService.verificar_producto(
-        user,
-        data.id_producto
-    )
-
-    return await service.crear_inventario(
-        data,
-        user.id_operario
-    )
-
-
-# =============================================================
-# OBTENER TODO
-# =============================================================
-
-@router.get(
-    "",
-    response_model=list[
-        InventarioResponse
-    ]
-)
-async def obtener_inventarios(
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    return await _filtrar_alcance(
-        user,
-        await service.obtener_inventarios()
-    )
-
-
-# =============================================================
-# STOCK BAJO
-# =============================================================
-
-@router.get(
-    "/stock-bajo",
-    response_model=list[
-        InventarioResponse
-    ]
-)
-async def obtener_stock_bajo(
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    return await _filtrar_alcance(
-        user,
-        await service.obtener_stock_bajo()
-    )
-
-
-# =============================================================
-# SIN STOCK
-# =============================================================
-
-@router.get(
-    "/sin-stock",
-    response_model=list[
-        InventarioResponse
-    ]
-)
-async def obtener_sin_stock(
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    return await _filtrar_alcance(
-        user,
-        await service.obtener_sin_stock()
-    )
-
-
-# =============================================================
-# SOBRE STOCK
-# =============================================================
-
-@router.get(
-    "/sobre-stock",
-    response_model=list[
-        InventarioResponse
-    ]
-)
-async def obtener_sobre_stock(
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    return await _filtrar_alcance(
-        user,
-        await service.obtener_sobre_stock()
-    )
-
-
-# =============================================================
-# POR PRODUCTO
-# =============================================================
-
-@router.get(
-    "/producto/{id_producto}",
-    response_model=list[
-        InventarioResponse
-    ]
-)
-async def obtener_inventario_producto(
-    id_producto: str,
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    await AccesoService.verificar_producto(
-        user,
-        id_producto
-    )
-
-    return await _filtrar_alcance(
-        user,
-        await service.obtener_por_producto(
-            id_producto
-        )
-    )
-
-
-# =============================================================
-# POR RACK
-# =============================================================
-
-@router.get(
-    "/rack/{id_rack}",
-    response_model=list[
-        InventarioResponse
-    ]
-)
-async def obtener_inventario_rack(
-    id_rack: str,
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    await AccesoService.verificar_rack(
-        user,
-        id_rack
-    )
-
-    return await (
-        service.obtener_por_rack(
-            id_rack
-        )
-    )
-
-
-# =============================================================
-# POR ID
-# =============================================================
-
-@router.get(
-    "/{id_inventario}",
-    response_model=InventarioResponse
-)
-async def obtener_inventario(
-    id_inventario: str,
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    return await (
-        AccesoService.verificar_inventario(
-            user,
-            id_inventario
-        )
-    )
-
-
-# =============================================================
-# ACTUALIZAR LIMITES (OPERARIO)
-# =============================================================
-
-@router.put(
-    "/{id_inventario}",
-    response_model=InventarioResponse
-)
-async def actualizar_inventario(
-    id_inventario: str,
-    data: InventarioUpdate,
-    user: UsuarioActual = Depends(
-        require_operario
-    )
-):
-
-    await AccesoService.verificar_inventario(
-        user,
-        id_inventario
-    )
-
-    return await (
-        service.actualizar_inventario(
-            id_inventario,
-            data,
-            user.id_operario
-        )
-    )
-
-
-# =============================================================
-# HISTORIAL DE CAMBIOS (EMPRESA / OPERARIO)
-# =============================================================
-
-@router.get(
-    "/{id_inventario}/historial",
-    response_model=list[
-        InventarioHistorialResponse
-    ]
-)
-async def obtener_historial(
-    id_inventario: str,
-    user: UsuarioActual = Depends(
-        require_empresa_u_operario
-    )
-):
-
-    await AccesoService.verificar_inventario(
-        user,
-        id_inventario
-    )
-
-    return await (
-        service.obtener_historial(
-            id_inventario
-        )
-    )
-
-
-# =============================================================
-# ELIMINAR (OPERARIO, sin stock)
-# =============================================================
-
-@router.delete(
-    "/{id_inventario}",
-    status_code=status.HTTP_200_OK
-)
-async def eliminar_inventario(
-    id_inventario: str,
-    user: UsuarioActual = Depends(
-        require_operario
-    )
-):
-
-    await AccesoService.verificar_inventario(
-        user,
-        id_inventario
-    )
-
-    return await (
-        service.eliminar_inventario(
-            id_inventario
-        )
-    )
+@router.get("/{id_inventario}", response_model=InventarioResponse)
+async def obtener(id_inventario: str, user: UsuarioActual = Depends(require_empresa_u_operario)):
+    return await AccesoService.verificar_inventario(user, id_inventario)

@@ -24,8 +24,8 @@ from app.dto.producto_dto import (
     ProductoResponse
 )
 
-from app.repositories.inventario_repository import (
-    InventarioRepository
+from app.repositories.detalle_inventario_repository import (
+    DetalleInventarioRepository
 )
 
 from app.services.acceso_service import (
@@ -387,7 +387,7 @@ async def eliminar_producto(
 
     # Un producto con inventario no se borra
     # (dejaría stock huérfano en los racks).
-    if await InventarioRepository().obtener_por_producto(
+    if await DetalleInventarioRepository().obtener_por_producto(
         id_producto
     ):
 

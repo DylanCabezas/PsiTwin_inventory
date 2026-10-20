@@ -32,6 +32,7 @@ class AlertaCreate(BaseModel):
     id_empresa: Optional[str] = None
     id_almacen: str
     id_inventario: str
+    id_detalle_inventario: str | None = None
     id_producto: str
 
     tipo_alerta: TipoAlerta
@@ -76,6 +77,7 @@ class AlertaResponse(BaseModel):
     id_empresa: str
     id_almacen: str
     id_inventario: str
+    id_detalle_inventario: str | None = None
     id_producto: str
 
     tipo_alerta: TipoAlerta

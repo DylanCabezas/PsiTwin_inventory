@@ -19,6 +19,11 @@ class EstadoRecepcion(str, Enum):
 class DetalleRecepcionCreate(BaseModel):
     id_detalle_reposicion: str
     id_inventario: str
+    id_detalle_inventario: str | None = None
+
+    id_rack: str | None = None
+    stock_minimo: int = Field(default=0, ge=0)
+    stock_maximo: int | None = Field(default=None, ge=0)
 
     cantidad_recibida: int = Field(
         ...,
@@ -103,6 +108,7 @@ class DetalleRecepcionResponse(BaseModel):
     id_recepcion: str
     id_detalle_reposicion: str
     id_inventario: str
+    id_detalle_inventario: str | None = None
 
     cantidad_recibida: int
     cantidad_rechazada: int

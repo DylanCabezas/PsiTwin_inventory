@@ -1,3 +1,4 @@
+from app.services.inventario_integridad import validar_referencia
 from datetime import datetime, timezone
 from uuid import uuid4
 
@@ -61,7 +62,7 @@ class RecomendacionService:
     # CREAR RECOMENDACION
     # ========================================================
 
-    async def crear(
+    async def _crear(
         self,
         data: RecomendacionCreate
     ) -> dict:
@@ -76,7 +77,9 @@ class RecomendacionService:
                     data.id_inventario,
 
                 tipo_recomendacion=
-                    data.tipo_recomendacion.value
+                    data.tipo_recomendacion.value,
+                id_producto=data.id_producto,
+                id_detalle_inventario=data.id_detalle_inventario
             )
         )
 
@@ -135,6 +138,7 @@ class RecomendacionService:
 
             "id_producto":
                 data.id_producto,
+            "id_detalle_inventario": data.id_detalle_inventario,
 
             "id_alerta":
                 data.id_alerta,
@@ -778,3 +782,10 @@ class RecomendacionService:
             "detalle":
                 detalle
         }
+    async def crear(self, data):
+        await validar_referencia(data)
+        from app.services.stock_lock import bloqueo_recurso
+        key = ":".join(("decision",data.id_inventario,data.id_producto,
+                        data.id_detalle_inventario or "general",data.tipo_recomendacion.value))
+        async with bloqueo_recurso(key):
+            return await self._crear(data)

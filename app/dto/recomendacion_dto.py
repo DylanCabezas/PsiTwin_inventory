@@ -32,6 +32,7 @@ class RecomendacionCreate(BaseModel):
     id_empresa: Optional[str] = None
     id_almacen: str
     id_inventario: str
+    id_detalle_inventario: str | None = None
     id_producto: str
 
     id_alerta: Optional[str] = None
@@ -80,6 +81,7 @@ class RecomendacionResponse(BaseModel):
     id_empresa: str
     id_almacen: str
     id_inventario: str
+    id_detalle_inventario: str | None = None
     id_producto: str
 
     id_alerta: Optional[str] = None

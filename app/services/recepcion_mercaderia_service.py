@@ -56,7 +56,7 @@ class RecepcionMercaderiaService:
             DetalleRecepcionService()
         )
 
-    async def crear(
+    async def _crear(
         self,
         data: RecepcionMercaderiaCreate,
         user: UsuarioActual
@@ -187,16 +187,23 @@ class RecepcionMercaderiaService:
             for detalle in detalles
         }
 
+        aceptada_por_linea = {}
+        for detalle in data.detalles:
+            accepted = 0 if detalle.estado_recepcion.value == "EN_EVALUACION" else detalle.cantidad_recibida-detalle.cantidad_rechazada
+            line = detalle.id_detalle_reposicion
+            aceptada_por_linea[line] = aceptada_por_linea.get(line,0)+accepted
+        for line,accepted in aceptada_por_linea.items():
+            previous = await self.detalle_recepcion_repository.obtener_por_detalle_reposicion(line)
+            if sum(d.get("cantidad_aceptada",0) for d in previous)+accepted > detalles_orden[line]["cantidad_solicitada"]:
+                raise HTTPException(409,"La cantidad aceptada supera la pendiente de la orden")
+
         racks: dict = {}
 
         for detalle in data.detalles:
 
-            inventario = await (
-                AccesoService.verificar_inventario(
-                    user,
-                    detalle.id_inventario
-                )
-            )
+            inventario = await self.detalle_recepcion_service.resolver_ubicacion(
+                detalle, detalles_orden[detalle.id_detalle_reposicion]["id_producto"], user,
+                crear=False)
 
             producto = await db["productos"].find_one(
                 {
@@ -343,3 +350,7 @@ class RecepcionMercaderiaService:
                 )
             )
         return recepciones
+    async def crear(self, data, user):
+        from app.services.stock_lock import bloqueo_orden
+        async with bloqueo_orden(data.id_orden_reposicion):
+            return await self._crear(data,user)

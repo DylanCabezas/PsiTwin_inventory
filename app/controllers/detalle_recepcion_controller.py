@@ -76,6 +76,9 @@ async def crear(
         data.id_inventario
     )
 
+    if data.id_detalle_inventario:
+        await AccesoService.verificar_detalle_inventario(user, data.id_detalle_inventario)
+
     return await service.crear(
         id_recepcion,
         data,
@@ -133,6 +136,9 @@ async def resolver_evaluacion(
             user,
             data.id_inventario
         )
+
+    if data.id_detalle_inventario:
+        await AccesoService.verificar_detalle_inventario(user, data.id_detalle_inventario)
 
     return await service.resolver_evaluacion(
         id_detalle,

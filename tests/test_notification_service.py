@@ -12,6 +12,13 @@ class FakeCollection:
     def __init__(self, documents=None):
         self.documents = documents or []
 
+    def find(self, query, projection=None):
+        matches = [dict(row) for row in self.documents if self._matches(row,query)]
+        class Cursor:
+            async def to_list(self,length=None):
+                return matches
+        return Cursor()
+
     async def find_one(self, query, projection=None):
         for document in self.documents:
             if self._matches(document, query):
@@ -79,8 +86,11 @@ class NotificationServiceTests(unittest.TestCase):
             }],
             "almacenes": [{"id": "almacen-1", "nombre": "Principal"}],
             "productos": [{"id_producto": "producto-1", "nombre": "Producto TEST"}],
-            "inventarios": [{
+            "inventarios": [{"id_inventario":"inventario-1","id_almacen":"almacen-1"}],
+            "detalles_inventario": [{
                 "id_inventario": "inventario-1",
+                "id_detalle_inventario": "detalle-1",
+                "id_producto": "producto-1",
                 "stock_actual": 18,
                 "stock_minimo": 10,
                 "stock_maximo": 200,

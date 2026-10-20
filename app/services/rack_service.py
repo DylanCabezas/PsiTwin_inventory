@@ -32,8 +32,8 @@ from app.repositories.zona_repository import (
     ZonaRepository
 )
 
-from app.repositories.inventario_repository import (
-    InventarioRepository
+from app.repositories.detalle_inventario_repository import (
+    DetalleInventarioRepository
 )
 
 
@@ -86,7 +86,7 @@ class RackService:
         ]
 
         inventarios = await (
-            InventarioRepository()
+            DetalleInventarioRepository()
             .obtener_por_racks(
                 ids
             )
@@ -719,7 +719,7 @@ class RackService:
         # --------------------------------------------------------
 
         inventarios = await (
-            InventarioRepository()
+            DetalleInventarioRepository()
             .obtener_por_rack(
                 id_rack
             )

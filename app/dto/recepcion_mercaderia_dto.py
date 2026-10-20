@@ -76,6 +76,10 @@ class ResolverEvaluacion(BaseModel):
     )
 
     id_inventario: str | None = None
+    id_detalle_inventario: str | None = None
+    id_rack: str | None = None
+    stock_minimo: int = Field(default=0, ge=0)
+    stock_maximo: int | None = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def validar_estado(self):

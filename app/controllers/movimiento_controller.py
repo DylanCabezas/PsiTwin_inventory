@@ -99,10 +99,8 @@ async def crear_movimiento(
             )
         )
 
-    await AccesoService.verificar_inventario(
-        user,
-        data.id_inventario
-    )
+    await AccesoService.verificar_inventario(user, data.id_inventario)
+    await AccesoService.verificar_detalle_inventario(user, data.id_detalle_inventario)
 
     # Campo interno (recepciones): no se acepta del cliente.
     data.id_detalle_recepcion = None
