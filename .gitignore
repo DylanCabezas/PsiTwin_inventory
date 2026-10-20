@@ -1,8 +1,30 @@
-node_modules
-dist
-*.local
+# Variables de entorno
 .env
 .env.*
 !.env.example
+
+# --- Frontend (Node/Vite) ---
+node_modules
+dist
+*.local
 *.tsbuildinfo
+
+# --- Backend (Python) ---
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Entorno virtual
+venv/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+
+# Pytest
+.pytest_cache/
+
+# Sistema operativo
 .DS_Store
+Thumbs.db
