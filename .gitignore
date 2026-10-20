@@ -1,7 +1,15 @@
 # Variables de entorno
 .env
+.env.*
+!.env.example
 
-# Python
+# --- Frontend (Node/Vite) ---
+node_modules
+dist
+*.local
+*.tsbuildinfo
+
+# --- Backend (Python) ---
 __pycache__/
 *.py[cod]
 *.pyo

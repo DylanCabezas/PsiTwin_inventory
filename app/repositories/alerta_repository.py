@@ -312,6 +312,47 @@ class AlertaRepository:
         )
 
     # ============================================================
+    # SENSORES: ALERTAS ABIERTAS
+    #
+    # origen = SENSOR y estado ACTIVA / VISTA.
+    # ids_dispositivo = None -> todas.
+    # ============================================================
+
+    async def listar_abiertas_sensores(
+        self,
+        ids_dispositivo: Optional[List[str]] = None
+    ) -> List[dict]:
+
+        filtro = {
+            "origen": "SENSOR",
+            "estado": {
+                "$in": [
+                    "ACTIVA",
+                    "VISTA"
+                ]
+            }
+        }
+
+        if ids_dispositivo is not None:
+            filtro["id_dispositivo"] = {
+                "$in": list(ids_dispositivo)
+            }
+
+        cursor = self.collection().find(
+            filtro,
+            {
+                "_id": 0
+            }
+        ).sort(
+            "inicio",
+            -1
+        )
+
+        return await cursor.to_list(
+            length=None
+        )
+
+    # ============================================================
     # ACTUALIZAR
     # ============================================================
 

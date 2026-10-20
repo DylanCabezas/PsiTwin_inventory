@@ -12,3 +12,5 @@ python-dotenv
 lightgbm
 pandas
 numpy
+aiomqtt
+websockets

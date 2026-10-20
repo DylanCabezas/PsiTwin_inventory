@@ -109,6 +109,18 @@ from app.controllers.inventory_risk_controller import (
     router as inventory_risk_router
 )
 
+from app.controllers.dispositivo_controller import (
+    router as dispositivo_router
+)
+
+from app.controllers.monitoreo_ws_controller import (
+    router as monitoreo_ws_router
+)
+
+from app.services.sensores.monitoreo_service import (
+    monitoreo
+)
+
 from app.controllers.saiki_controller import (
     router as saiki_router
 )
@@ -143,7 +155,13 @@ async def lifespan(
 
     await connect_to_mongo()
 
+    # Sensores: consumidor MQTT + motor de alertas.
+    # Si el broker no está, reintenta en segundo plano.
+    await monitoreo.iniciar()
+
     yield
+
+    await monitoreo.detener()
 
     # --------------------------------------------------------
     # CIERRE DE LA APLICACION
@@ -641,3 +659,22 @@ app.include_router(
 
 from app.controllers.detalle_inventario_controller import router as detalle_inventario_router
 app.include_router(detalle_inventario_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)
+
+# ============================================================
+# DISPOSITIVOS / SENSORES
+#
+# REST con token obligatorio. El WebSocket se autentica
+# con el JWT en la query (?token=), por eso va sin la
+# dependencia HTTP del router.
+# ============================================================
+
+app.include_router(
+    dispositivo_router,
+    prefix=settings.api_prefix,
+    dependencies=PROTEGIDO
+)
+
+app.include_router(
+    monitoreo_ws_router,
+    prefix=settings.api_prefix
+)
