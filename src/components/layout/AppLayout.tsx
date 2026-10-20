@@ -4,7 +4,7 @@
  * Para EMPRESA / OPERARIO abre el WebSocket de monitoreo (`MonitoreoProvider`): toast al abrirse una alerta y
  * contador de alertas abiertas en el ítem «Monitoreo».
  */
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigation } from 'react-router'
 import { useSession } from '@/auth/SessionContext'
 import { useEmpresa } from '@/auth/useEmpresa'
@@ -15,6 +15,7 @@ import { Brand } from './Brand'
 import { etiquetaAlerta } from '@/features/monitoreo/monitoreoUtils'
 import { paths } from '@/paths'
 import { NAV_GRUPOS, NAV_ITEMS, type NavItem } from './navigation'
+const SaikiNotification = lazy(() => import('@/features/saiki/SaikiSensors').then(module => ({ default: module.SaikiNotification })))
 
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const alertasAbiertas = useMonitoreoVivo()?.alertasAbiertas.length ?? 0
@@ -155,6 +156,7 @@ function AppLayoutContenido() {
   return (
     <div className="min-h-dvh bg-bg">
       <NavigationProgress />
+      <Suspense fallback={null}><SaikiNotification /></Suspense>
       <a
         href="#contenido"
         className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[80] focus:rounded focus:bg-surface focus:px-3 focus:py-2 focus:text-fg focus:shadow-pop"

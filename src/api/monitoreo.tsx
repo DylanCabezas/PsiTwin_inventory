@@ -133,6 +133,7 @@ export function useMonitoreo(idZona?: string, onAlerta?: (evento: 'ABIERTA' | 'R
       vivo = false
       clearTimeout(timer)
       ws?.close()
+      setDispositivos(new Map())
       setConexion('cerrado')
     }
   }, [habilitado, token, idZona, qc])

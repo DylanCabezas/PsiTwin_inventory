@@ -44,6 +44,10 @@ class OptionalInventoryArgs(BaseModel):
     id_inventario: str | None = None
 
 
+class SensorStatusArgs(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
 class WarehouseStatusArgs(OptionalInventoryArgs):
     include_visual: bool = False
     page: int = Field(default=1, ge=1)
@@ -64,6 +68,11 @@ class SaikiToolRegistry:
         self.recomendacion_service = RecomendacionService()
         self.movimiento_service = MovimientoService()
         self._handlers: dict[str, tuple[type[BaseModel], ToolHandler, str]] = {
+            "get_sensor_status": (
+                SensorStatusArgs,
+                self.get_sensor_status,
+                "SENSORES",
+            ),
             "get_inventory": (
                 InventoryArgs,
                 self.get_inventory,
@@ -124,6 +133,7 @@ class SaikiToolRegistry:
                         + (
                             "Para un resumen general del almacén no requiere argumentos."
                             if name == "get_warehouse_status"
+                            else "Sensores y equipos de refrigeración: lecturas, ubicaciones, alertas e historial autorizado, sin argumentos." if name == "get_sensor_status"
                             else f"Tool autorizada: {name}."
                         )
                     ),
@@ -149,6 +159,8 @@ class SaikiToolRegistry:
             raise ValueError(f"Argumentos inválidos para {name}: {exc}") from exc
         visible = None
         started = time.perf_counter()
+        if name == "get_sensor_status":
+            return await handler(validated, user), source
         if user is not None:
             visible = await self._authorize(name, validated, user)
         logger.info("saiki_authorization tool=%s duration_ms=%.3f", name, (time.perf_counter() - started) * 1000)
@@ -176,6 +188,11 @@ class SaikiToolRegistry:
         if getattr(args, "id_producto", None):
             await AccesoService.verificar_producto(user, args.id_producto)
         return visible
+
+    async def get_sensor_status(self, args: SensorStatusArgs, user=None):
+        from app.services.saiki_sensors import sensor_report
+        answer, evidence = await sensor_report(user)
+        return {"resumen": answer, **evidence}
 
     async def get_inventory(self, args: InventoryArgs):
         header = await self.inventario_service.obtener_inventario(args.id_inventario)

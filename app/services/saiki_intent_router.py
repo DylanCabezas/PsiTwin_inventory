@@ -1,4 +1,4 @@
-﻿from dataclasses import dataclass
+from dataclasses import dataclass
 import re
 import unicodedata
 
@@ -25,6 +25,8 @@ class SaikiIntentRouter:
     @classmethod
     def classify(cls, message: str, history: list[dict] | None = None) -> SaikiIntent:
         text = cls._normalize(message)
+        if re.search(r'sensor|temperatura|humedad|refrigera|equipo de frio|corriente|incidente|calibr|mantenimiento|puerta', text):
+            return SaikiIntent('sensors', frozenset())
         if re.fullmatch(r'\s*(hola|buenos dias|buenas tardes|buenas noches|hey)(\s+saiki)?[!,.?\s]*', text):
             return SaikiIntent('greeting', frozenset())
         horizon = cls._horizon_days(text)

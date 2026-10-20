@@ -1,7 +1,7 @@
 /**
  * Saiki: chat con el asistente del backend. Opcionalmente se le da contexto (un producto o un inventario)
  * para que responda con sus datos reales, su riesgo, alertas y recomendaciones.
- * La conversación vive solo en esta pantalla (el backend no guarda historial ni recibe los mensajes anteriores).
+ * La conversación vive en esta pantalla; se envía un historial acotado que el backend no persiste.
  */
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
@@ -10,6 +10,9 @@ import { saikiApi } from '@/api/saiki'
 import { InventarioSelect, ProductoSelect } from '@/components/selects'
 import { Badge, Button, Card, Field, PageHeader, Spinner, Textarea } from '@/components/ui'
 import { cn } from '@/lib/cn'
+import { AgentAudioVisualizerWave } from '@/components/agents-ui/agent-audio-visualizer-wave'
+import { SaikiSensors, useSaludo } from './SaikiSensors'
+import { useSaikiVoice } from './useSaikiVoice'
 
 interface Mensaje {
   de: 'usuario' | 'saiki' | 'error'
@@ -25,6 +28,8 @@ const limpiar = (t: string) => t.replace(/<think>[\s\S]*?<\/think>/g, '').trim()
 export default function SaikiPage() {
   const [mensajes, setMensajes] = useState<Mensaje[]>([])
   const [pregunta, setPregunta] = useState('')
+  const saludo = useSaludo()
+  const voice = useSaikiVoice(setPregunta)
   const [idProducto, setIdProducto] = useState('')
   const [idInventario, setIdInventario] = useState('')
   const finRef = useRef<HTMLDivElement>(null)
@@ -40,10 +45,11 @@ export default function SaikiPage() {
   const enviar = (texto: string) => {
     const q = texto.trim()
     if (!q || preguntar.isPending) return
+    voice.stop()
     setMensajes((m) => [...m, { de: 'usuario', texto: q }])
     setPregunta('')
     preguntar.mutate(
-      { question: q, ...(idInventario ? { id_inventario: idInventario } : idProducto ? { id_producto: idProducto } : {}) },
+      { question: q, history: mensajes.filter(m => m.de !== 'error').slice(-38).map(m => ({ role: m.de === 'usuario' ? 'user' as const : 'assistant' as const, content: m.texto.slice(0, 8000) })), ...(idInventario ? { id_inventario: idInventario } : idProducto ? { id_producto: idProducto } : {}) },
       {
         onSuccess: (r) => setMensajes((m) => [...m, { de: 'saiki', texto: limpiar(r.answer), avisos: r.warnings }]),
         onError: (e) =>
@@ -70,6 +76,16 @@ export default function SaikiPage() {
 
   return (
     <>
+      <div className="mb-6 rounded-2xl border border-violet-400/30 bg-gradient-to-r from-blue-500/10 to-violet-500/10 p-5">
+        <AgentAudioVisualizerWave size="md" state={preguntar.isPending ? 'thinking' : voice.listening ? 'listening' : voice.speaking ? 'speaking' : 'idle'} color="#6587ff" colorShift={1.5} className="mx-auto" />
+        <p className="text-center font-semibold">{saludo}. Soy Saiki.</p>
+        <p role="status" className="text-center text-sm text-fg-muted">{preguntar.isPending ? 'Pensando' : voice.listening ? 'Escuchando' : voice.speaking ? 'Hablando' : 'En reposo'}</p>
+        <div className="mt-3 flex justify-center gap-2">
+          {voice.canListen && <Button variant="secondary" disabled={preguntar.isPending} onClick={voice.listen}>{voice.listening ? 'Dejar de escuchar' : 'Dictar pregunta'}</Button>}
+          {voice.speaking && <Button variant="ghost" onClick={voice.stop}>Detener voz</Button>}
+        </div>
+        {voice.error && <p role="alert">{voice.error}</p>}
+      </div>
       <PageHeader
         eyebrow="Asistente"
         title="Saiki"
@@ -91,7 +107,7 @@ export default function SaikiPage() {
             {mensajes.length === 0 && (
               <div className="flex flex-col items-start gap-2">
                 <p className="text-sm text-fg-muted">Prueba con una de estas preguntas:</p>
-                {SUGERENCIAS.map((s) => (
+                {['¿Qué sensores presentan alertas críticas?', 'Analiza el historial de incidentes de refrigeración y recomienda revisiones.', ...SUGERENCIAS].map((s) => (
                   <Button key={s} variant="secondary" size="sm" onClick={() => enviar(s)}>
                     {s}
                   </Button>
@@ -111,6 +127,7 @@ export default function SaikiPage() {
                 >
                   {m.de !== 'usuario' && <p className="label-stencil mb-1">{m.de === 'saiki' ? 'Saiki' : 'Error'}</p>}
                   {m.texto}
+                  {m.de === 'saiki' && voice.canSpeak && <div className="mt-2"><Button size="sm" variant="ghost" onClick={() => voice.speak(m.texto)}>Escuchar respuesta</Button></div>}
                   {m.avisos?.map((a) => (
                     <p key={a} className="mt-2 text-xs text-fg-subtle">
                       {a}
@@ -181,6 +198,7 @@ export default function SaikiPage() {
           </div>
         </Card>
       </div>
+      <div className="mt-6"><SaikiSensors /></div>
     </>
   )
 }

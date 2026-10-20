@@ -44,6 +44,7 @@ class SaikiService:
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
         files = ("services/saiki_service.py", "services/saiki_tools.py", "services/saiki_inventory_summary.py", "services/saiki_intent_router.py", "services/saiki_responses.py", "dto/saiki_dto.py", "prompts/saiki_system_prompt.py", "controllers/saiki_controller.py")
+        files = (*files, "services/saiki_sensors.py")
         self.code_revision = hashlib.sha256(b"".join((root / name).read_bytes() for name in files)).hexdigest()[:12]
         self.settings = get_settings()
         self.tools = SaikiToolRegistry()
@@ -116,6 +117,10 @@ class SaikiService:
     ) -> dict:
         context = dict(data.context)
         intent = intent or self.intent_router.classify(data.message or "", data.history)
+        if intent.kind == "sensors":
+            from app.services.saiki_sensors import sensor_report
+            answer, evidence = await sensor_report(user)
+            return self._simple_response(answer, "backend", {"sensores": evidence})
         if intent.kind == "greeting":
             return self._simple_response(
                 "¡Hola, soy Saiki!",

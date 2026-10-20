@@ -6,6 +6,7 @@ import { api } from './client'
 
 export interface SaikiAskBody {
   question: string
+  history?: { role: 'user' | 'assistant'; content: string }[]
   id_inventario?: string
   id_producto?: string
 }
