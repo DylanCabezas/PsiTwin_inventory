@@ -1,6 +1,6 @@
 # Roles y flujo de reposición — contrato backend ↔ frontend (2026-10-03)
 
-Backend: `~/Documentos/PsiTwin_inventory` (base: commit `b892108`). El usuario autorizó modificarlo. **Sin commits.**
+Backend: `backend/` (este repo) (base: commit `b892108`). El usuario autorizó modificarlo. **Sin commits.**
 Si al implementar hay que desviarse, actualizar este archivo (sección "Desviaciones").
 
 ## 1. Tres tipos de usuario, un solo login
