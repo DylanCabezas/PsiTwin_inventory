@@ -29,6 +29,9 @@ venv/
 .DS_Store
 Thumbs.db
 
+# Vercel (link local del proyecto)
+.vercel/
+
 # Datos locales (no versionar)
 /inventarios_legacy.json
 /inventarios_v2.json
