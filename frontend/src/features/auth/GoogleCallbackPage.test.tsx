@@ -31,10 +31,11 @@ describe('Google callback navigation', () => {
     expect(api.post).toHaveBeenCalledOnce()
   })
   it('takes an unlinked identity to company registration without creating a session', async () => {
-    vi.mocked(api.post).mockResolvedValue({ registration_required: true, registration_ticket: 'verified-registration-ticket' })
+    vi.mocked(api.post).mockResolvedValue({ registration_required: true, registration_ticket: 'verified-registration-ticket', verified_email: 'ceo@gmail.com' })
     await act(async () => { root.render(<RouterProvider router={router} />) })
     expect(apply).not.toHaveBeenCalled()
     expect(router.state.location.pathname).toBe('/registro')
     expect(sessionStorage.getItem('psitwin.google.registration')).toBe('verified-registration-ticket')
+    expect(sessionStorage.getItem('psitwin.google.email')).toBe('ceo@gmail.com')
   })
 })

@@ -1,12 +1,38 @@
 # Autenticación Google, bienvenida y Saiki
 
+## Registro actual: Google primero
+
+La pantalla inicial solo muestra «Continuar con Google». Después de elegir Gmail
+y validar la identidad, el backend devuelve un ticket temporal ligado a la pestaña
+y el correo verificado para mostrarlo. A continuación se solicitan los datos de
+empresa y la nueva contraseña de PsiTwin, y «Crear mi cuenta» completa el registro.
+No se pide la contraseña de Gmail ni se guarda la contraseña de PsiTwin en el navegador.
+Si el ticket expira o se consume, se vuelve a solicitar la verificación con Google.
+Las cuentas ya vinculadas acceden a su empresa sin crear otra cuenta.
+
+Si aparece `GOOGLE_NOT_CONFIGURED`, faltan las credenciales OAuth de la aplicación.
+No son la contraseña de Gmail ni `SMTP_APP_PASSWORD`. En este equipo se comprobó
+que el `.env` de la raíz existe pero no contiene valores para las dos claves, y
+que `backend/.env` no existe. Configura en el `.env` de la raíz:
+
+```dotenv
+GOOGLE_CLIENT_ID=ID_DEL_CLIENTE_WEB_DE_GOOGLE
+GOOGLE_CLIENT_SECRET=SECRETO_DEL_CLIENTE_WEB_DE_GOOGLE
+GOOGLE_REDIRECT_URI=http://localhost:5173/auth/google/callback
+```
+
+Los valores de ejemplo no funcionan: deben sustituirse por las credenciales del
+proyecto propio en Google Cloud. Sigue la configuración de la sección siguiente
+y reinicia el backend después de guardarlas. No publiques ni pegues el secreto
+en el chat. El registro real permanece pendiente hasta disponer de esas credenciales.
+
 ## Diagnóstico y comportamiento
 
 La verificación antigua guardaba `fecha_verificacion_correo` como `datetime` de MongoDB, mientras `EmpresaResponse` aceptaba únicamente texto. Tanto el perfil como `/auth/me` reutilizan ese modelo: el error de serialización impedía cargar la empresa e incluso responder al login posterior. La inspección de la base existente confirmó una empresa con ese campo de tipo BSON `date`; no se modificaron cuentas existentes. El DTO normaliza esa fecha a ISO 8601 sin migrar ni borrar documentos.
 
 La aplicación usa JWT Bearer, con expiración `ACCESS_TOKEN_EXPIRE_MINUTES`. El cliente conserva token y sesión en `localStorage`, los restaura al recargar y sincroniza con `/auth/me`; cerrar sesión borra ambos y la caché. Un 401 de autenticación cierra la sesión; los fallos de MongoDB, correo o validación empresarial no se convierten en 401. No se utilizan cookies para OAuth. El callback vuelve al frontend y este intercambia el código con FastAPI mediante POST. El origen del frontend debe estar en `CORS_ORIGINS` cuando la API está en otro origen; el proxy de Vite permite usar `/api/v1` durante desarrollo.
 
-El registro muestra directamente empresa, CEO, RUC, sector, teléfono, contraseña y confirmación. Hay un único botón «Continuar con Google»; no hay un selector de registro alternativo. Google proporciona el correo verificado. La contraseña elegida se envía al backend, se guarda como hash en el flujo temporal y se habilita en la empresa únicamente después de validar Google. Nunca se guarda en el borrador de sessionStorage. El acceso termina en `/`, cuyo dashboard permite crear el primer almacén. El login muestra únicamente Gmail y contraseña de PsiTwin, sin botón de acceso directo con Google. Tanto el formulario como `POST /auth/login` rechazan dominios distintos de `gmail.com`; esta regla también alcanza a operarios y proveedores. Las cuentas anteriores no se borran, pero las que tengan otro dominio no podrán acceder por este login mientras conserven ese correo. Los nuevos registros Google también exigen Gmail para evitar crear cuentas incompatibles con el login. Los endpoints OAuth permanecen para registro y vinculación segura.
+El registro sigue los dos pasos descritos al inicio de esta guía: primero Google; después datos de empresa y nueva contraseña de PsiTwin. El login conserva Gmail y la contraseña creada, con validación del dominio gmail.com en frontend y backend. Los endpoints OAuth se conservan para registro y vinculación segura; no se modifican las cuentas existentes.
 
 ## Configuración manual de Google Cloud
 

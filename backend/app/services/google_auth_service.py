@@ -152,10 +152,12 @@ class GoogleAuthService:
             return self.session(linked)
         if flow.get('company'):
             return await self.register(identity, CompanyDetails(**flow['company']), password_hash=flow.get('password_hash'))
+        if identity['email'].rsplit('@', 1)[-1].lower() != 'gmail.com':
+            raise HTTPException(422, 'Registra tu empresa con una cuenta Gmail (@gmail.com).')
         ticket = secrets.token_urlsafe(32)
         await flows.insert_one({'_id': digest(ticket), 'binding': digest(binding), 'identity': identity,
             'status': 'REGISTRATION', 'expires_at': datetime.now(timezone.utc) + timedelta(minutes=10)})
-        return {'registration_required': True, 'registration_ticket': ticket}
+        return {'registration_required': True, 'registration_ticket': ticket, 'verified_email': identity['email']}
 
     async def finish_registration(self, ticket, binding, company, password_hash=None):
         flow = await self.database()['google_oauth_flows'].find_one_and_update({

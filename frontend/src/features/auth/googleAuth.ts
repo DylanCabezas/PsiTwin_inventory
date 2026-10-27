@@ -2,10 +2,11 @@ import { api, ApiError } from '@/api/client'
 import type { LoginResponseRaw } from '@/api/types'
 
 export type GoogleCompany = { nombre: string; nombre_ceo: string; sector: string; ruc: string; telefono: string }
-export type GoogleResult = LoginResponseRaw & { registration_required?: boolean; registration_ticket?: string }
+export type GoogleResult = LoginResponseRaw & { registration_required?: boolean; registration_ticket?: string; verified_email?: string }
 const BINDING = 'psitwin.google.binding'
 const TICKET = 'psitwin.google.registration'
 const DRAFT = 'psitwin.google.company'
+const EMAIL = 'psitwin.google.email'
 export function googleBinding() {
   let binding = sessionStorage.getItem(BINDING)
   if (!binding) {
@@ -16,6 +17,7 @@ export function googleBinding() {
 }
 export async function startGoogle(company?: GoogleCompany, password?: string, newPassword?: string, registrationPassword?: string) {
   sessionStorage.removeItem(TICKET)
+  sessionStorage.removeItem(EMAIL)
   const binding = googleBinding()
   if (company) sessionStorage.setItem(DRAFT, JSON.stringify(company))
   const result = await api.post<{ authorization_url: string }>(newPassword ? '/auth/google/password/start' : password === undefined ? '/auth/google/start' : '/auth/google/link',
@@ -31,8 +33,13 @@ export function googleDraft(): Partial<GoogleCompany> {
   try { return JSON.parse(sessionStorage.getItem(DRAFT) ?? '{}') as Partial<GoogleCompany> } catch { return {} }
 }
 export function pendingGoogleRegistration() { return sessionStorage.getItem(TICKET) }
-export function saveGoogleRegistration(ticket: string) { sessionStorage.setItem(TICKET, ticket) }
-export function clearGoogleFlow() { for (const key of [BINDING, TICKET, DRAFT]) sessionStorage.removeItem(key) }
+export function googleRegistrationEmail() { return sessionStorage.getItem(EMAIL) ?? '' }
+export function saveGoogleRegistration(ticket: string, email?: string) {
+  sessionStorage.setItem(TICKET, ticket)
+  if (email) sessionStorage.setItem(EMAIL, email)
+  else sessionStorage.removeItem(EMAIL)
+}
+export function clearGoogleFlow() { for (const key of [BINDING, TICKET, DRAFT, EMAIL]) sessionStorage.removeItem(key) }
 export async function finishGoogleRegistration(company: GoogleCompany, registrationPassword?: string) {
   try {
     return await api.post<GoogleResult>('/auth/google/register', { company, ...(registrationPassword ? { registration_password: registrationPassword } : {}), binding: googleBinding(), registration_ticket: pendingGoogleRegistration() }, { auth: false })

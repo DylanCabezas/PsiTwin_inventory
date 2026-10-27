@@ -4,7 +4,8 @@ import { Link, useNavigate } from 'react-router'
 import { z } from 'zod'
 import { authApi, useAplicarLogin } from '@/api/auth'
 import { useState } from 'react'
-import { startGoogle, googleDraft, pendingGoogleRegistration, finishGoogleRegistration, clearGoogleFlow } from './googleAuth'
+import { startGoogle, googleDraft, pendingGoogleRegistration, googleRegistrationEmail, finishGoogleRegistration, clearGoogleFlow } from './googleAuth'
+import { ApiError } from '@/api/client'
 import { Button, Field, Input, useApiErrorHandler } from '@/components/ui'
 import { texto } from '@/lib/zod'
 import { paths } from '@/paths'
@@ -32,6 +33,8 @@ export default function RegistroPage() {
   const handleError = useApiErrorHandler()
   const apply = useAplicarLogin()
   const [googleBusy, setGoogleBusy] = useState(false)
+  const [verified, setVerified] = useState(() => !!pendingGoogleRegistration())
+  const [flowError, setFlowError] = useState('')
 
   const form = useForm<RegistroForm>({
     resolver: zodResolver(schema),
@@ -39,17 +42,30 @@ export default function RegistroPage() {
   })
   const { register, handleSubmit, formState } = form
   const err = formState.errors
+  async function beginGoogle() {
+    setGoogleBusy(true)
+    setFlowError('')
+    try { await startGoogle() }
+    catch (error) { setFlowError(error instanceof Error ? error.message : 'No se pudo iniciar la verificación con Google.') }
+    finally { setGoogleBusy(false) }
+  }
   async function withGoogle() {
     if (!await form.trigger()) return
     const values = form.getValues()
     const company = { nombre: values.nombre.trim(), nombre_ceo: values.nombre_ceo.trim(), ruc: values.ruc.trim(), sector: values.sector.trim(), telefono: values.telefono.trim() }
     setGoogleBusy(true)
+    setFlowError('')
     try {
       if (pendingGoogleRegistration()) {
         const result = await finishGoogleRegistration(company, values.password)
         apply(authApi.fromGoogle(result)); clearGoogleFlow(); navigate('/', { replace: true })
-      } else await startGoogle(company, undefined, undefined, values.password)
-    } catch (e) { handleError(e, { title: 'No se pudo registrar con Google' }) }
+      } else { setVerified(false); setFlowError('Verifica tu Gmail con Google antes de crear tu cuenta.') }
+    } catch (e) {
+      if (!pendingGoogleRegistration()) {
+        setVerified(false)
+        setFlowError(e instanceof ApiError ? e.detail : 'La verificación expiró. Vuelve a continuar con Google.')
+      } else handleError(e, { title: 'No se pudo completar el registro' })
+    }
     finally { setGoogleBusy(false) }
   }
 
@@ -58,7 +74,7 @@ export default function RegistroPage() {
   return (
     <AuthLayout
       title="Registrar empresa"
-      subtitle="Crea la cuenta de administración de tu empresa."
+      subtitle={verified ? 'Gmail verificado. Completa tu empresa y crea tu contraseña de PsiTwin.' : 'Primero verifica tu Gmail con Google. Después crearás tu contraseña de PsiTwin.'}
       footer={
         <>
           ¿Ya tienes cuenta?{' '}
@@ -68,6 +84,12 @@ export default function RegistroPage() {
         </>
       }
     >
+      {flowError && <p role="alert" className="mb-4 text-sm text-danger">{flowError}</p>}
+      {!verified ? <div className="flex flex-col gap-4">
+        <Button type="button" size="lg" fullWidth loading={googleBusy} onClick={() => void beginGoogle()}>Continuar con Google</Button>
+        <p className="text-sm text-fg-muted">Selecciona una cuenta Gmail (@gmail.com). La contraseña de PsiTwin se crea después de verificar tu correo.</p>
+      </div> : <>
+      <p className="mb-4 text-sm text-fg-muted">{googleRegistrationEmail() ? `Gmail verificado: ${googleRegistrationEmail()}` : 'Tu identidad de Google está verificada.'}</p>
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
         <Field label="Nombre de la empresa" error={err.nombre?.message} required>
           <Input autoComplete="organization" placeholder="PsiTwin Logistics" {...register('nombre')} />
@@ -96,9 +118,10 @@ export default function RegistroPage() {
             <Input type="password" autoComplete="new-password" {...register('confirmar')} />
           </Field>
         </div>
-        <Button type="submit" size="lg" fullWidth loading={googleBusy}>Continuar con Google</Button>
-        <p className="text-sm text-fg-muted">Usa una cuenta Gmail (@gmail.com). Google verifica tu correo; después ingresarás con ese Gmail y la contraseña de PsiTwin que acabas de crear.</p>
+        <Button type="submit" size="lg" fullWidth loading={googleBusy}>Crear mi cuenta</Button>
+        <p className="text-sm text-fg-muted">Esta contraseña es para PsiTwin. No escribas la contraseña de tu cuenta Google.</p>
       </form>
+      </>}
     </AuthLayout>
   )
 }

@@ -89,6 +89,7 @@ def test_google_registration_enables_chosen_password_after_verified_identity(mon
                 result = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(start.json()['authorization_url']), 'code': 'controlled-code'})
                 if google_first:
                     assert result.json()['registration_required']
+                    assert result.json()['verified_email'] == 'carlos@gmail.com'
                     result = await client.post('/auth/google/register', json={'binding': BINDING, 'company': DETAILS, 'registration_password': password, 'registration_ticket': result.json()['registration_ticket']})
                 assert result.status_code == 200
                 assert result.json()['empresa']['password_local_habilitada'] is True
