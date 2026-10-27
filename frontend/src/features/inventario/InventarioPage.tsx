@@ -1,7 +1,7 @@
 /**
  * Inventario de la empresa: stock real por producto y rack (Inventario.stock_actual).
  * Pestañas con los endpoints específicos del backend: todos / stock-bajo / sin-stock / sobre-stock.
- * El backend no filtra por empresa: se acota con useUbicaciones().perteneceAEmpresa(id_rack).
+ * El backend aplica el alcance autenticado; la UI además relaciona cada detalle con su rack.
  *
  * La pestaña se refleja en la URL (`/inventario?estado=stock-bajo|sin-stock|sobre-stock`) para poder enlazarla.
  */

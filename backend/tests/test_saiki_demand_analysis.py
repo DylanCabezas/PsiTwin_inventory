@@ -8,6 +8,20 @@ import pytest
 from app.services.saiki_intent_router import SaikiIntentRouter
 from app.services import saiki_demand
 
+def test_selected_warehouse_does_not_force_inventory_questions_into_demand(monkeypatch):
+    from app.services.saiki_service import SaikiService
+    from app.dto.saiki_dto import SaikiAskRequest
+    from app.dto.auth_dto import UsuarioActual
+    service = SaikiService()
+    current = AsyncMock(return_value={'answer': 'Tienes 10 productos registrados.'})
+    monkeypatch.setattr(service, '_fast_current_response', current)
+    demand = AsyncMock(side_effect=AssertionError('Inventory count must not request forecasts'))
+    monkeypatch.setattr(saiki_demand, 'demand_answer', demand)
+    result = asyncio.run(service.ask(SaikiAskRequest(message='¿Cuántos productos tengo registrados?', id_almacen='selected'), UsuarioActual(rol='EMPRESA', id_empresa='test')))
+    assert '10' in result['answer']
+    current.assert_awaited_once()
+    demand.assert_not_awaited()
+
 
 @pytest.mark.parametrize('question,horizon', [
     ('Que productos tendran mayor demanda durante los proximos 30 dias?', 30),

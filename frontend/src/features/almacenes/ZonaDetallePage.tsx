@@ -1,3 +1,4 @@
+import { inventarioDetalleId } from '@/api/inventarios'
 /**
  * Detalle de zona: CRUD de racks mostrados como una grilla de posiciones (filas = niveles, color = estado)
  * y, para el rack seleccionado, el inventario que contiene (stock_actual vs mínimo/máximo con StockBadge).
@@ -286,7 +287,7 @@ function RackPanel({ rack, codigo, onEditar, onEliminar }: { rack: Rack; codigo:
         loading={invQ.isLoading}
         error={invQ.error}
         onRetry={() => void invQ.refetch()}
-        rowKey={(i) => i.id_inventario}
+        rowKey={inventarioDetalleId}
         empty={<EmptyState compact icon="box" title="Rack vacío" description="Este rack no tiene inventario registrado." />}
         columns={[
           {

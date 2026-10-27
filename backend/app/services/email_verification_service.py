@@ -149,6 +149,8 @@ class EmailVerificationService:
         code: str,
     ) -> dict[str, Any]:
         entity = await self._get_entity_record(entity_type, entity_id)
+        if entity and entity.get('requiere_verificacion_registro') is True:
+            return {'verified': False, 'status': 'USE_EMAIL_LINK'}
         if not entity:
             return {
                 "verified": False,

@@ -1,20 +1,13 @@
+> Flujo sustituido: consulta [Registro Gmail por SMTP, sin OAuth](REGISTRO_GMAIL_SMTP.md). Este documento conserva detalles historicos.
+
 # Autenticación Google, bienvenida y Saiki
 
-## Registro actual: empresa → Google → contraseña de PsiTwin
+## Flujo vigente
 
-La pantalla inicial muestra empresa, CEO, RUC, sector y teléfono. El correo se
-obtiene de Google y se muestra como un atributo verificado, sin confiar en un
-correo escrito desde el frontend. «Continuar con Google» valida y conserva los
-datos en el flujo temporal del backend y en el borrador de la pestaña.
-Después de Google, el backend devuelve un ticket temporal y los datos conservados.
-Se muestra «Crear contraseña de PsiTwin», con contraseña nueva y confirmación.
-«Finalizar registro» crea la empresa, vincula `sub`, guarda Argon2id, establece la
-sesión y despacha la bienvenida idempotente. No hay una empresa definitiva antes
-de ese paso. No se pide la contraseña de Gmail ni se persiste la contraseña de
-PsiTwin en almacenamiento del navegador.
-Si el ticket expira o se consume, se vuelve a solicitar la verificación con Google.
-El login admite correo/contraseña y Google; una identidad vinculada accede a la
-misma empresa. Intentar registrarla de nuevo informa que ya existe, sin duplicarla.
+Consulta [Registro unico Gmail](REGISTRO_UNICO_GMAIL.md) para el flujo actual,
+las pruebas y la configuracion exacta. El registro muestra datos empresariales,
+verificacion Gmail y ambas contrasenas en una sola pagina. El login publico
+utiliza exclusivamente correo y contrasena de PsiTwin, sin boton de Google.
 
 Si aparece `GOOGLE_NOT_CONFIGURED`, faltan las credenciales OAuth de la aplicación.
 No son la contraseña de Gmail ni `SMTP_APP_PASSWORD`. En este equipo se comprobó
@@ -38,7 +31,8 @@ La verificación antigua guardaba `fecha_verificacion_correo` como `datetime` de
 
 La aplicación usa JWT Bearer, con expiración `ACCESS_TOKEN_EXPIRE_MINUTES`. El cliente conserva token y sesión en `localStorage`, los restaura al recargar y sincroniza con `/auth/me`; cerrar sesión borra ambos y la caché. Un 401 de autenticación cierra la sesión; los fallos de MongoDB, correo o validación empresarial no se convierten en 401. No se utilizan cookies para OAuth. El callback vuelve al frontend y este intercambia el código con FastAPI mediante POST. El origen del frontend debe estar en `CORS_ORIGINS` cuando la API está en otro origen; el proxy de Vite permite usar `/api/v1` durante desarrollo.
 
-El registro sigue los tres pasos descritos al inicio de esta guía. El login admite Gmail/contraseña y el botón de Google, con validación del dominio gmail.com en frontend y backend. Los endpoints OAuth se conservan para registro y vinculación segura; no se modifican los datos empresariales de las cuentas existentes.
+Las cuentas antiguas de otros dominios conservan el acceso por contrasena,
+incluidos operarios y proveedores. Los nuevos registros requieren Gmail verificado.
 
 ## Configuración manual de Google Cloud
 
@@ -58,7 +52,7 @@ CORS_ORIGINS=http://localhost:5173
 
 5. Instala las dependencias de `requirements.txt` con el Python de tu backend; Google necesita `httpx` y `PyJWT[crypto]`. Reinicia FastAPI y Vite. No uses variables `VITE_` para el secreto. Mantén un `SECRET_KEY` privado para los JWT de PsiTwin.
 6. En producción habilita la reescritura SPA para que `/auth/google/callback` devuelva `index.html`. Usa HTTPS. El callback elimina el código de la barra de direcciones y la aplicación usa `Referrer-Policy` mediante meta `no-referrer`.
-7. Comprueba en el navegador registro, consentimiento oficial, entrada al dashboard, recarga, logout y acceso nuevamente con Google. Prueba también cancelación del consentimiento y una cuenta sin empresa vinculada. Estos pasos requieren credenciales reales, que no se agregaron al repositorio.
+7. Comprueba en el navegador registro, consentimiento oficial, entrada al dashboard, recarga, logout y acceso nuevamente con correo y contrasena. Prueba también cancelación del consentimiento y una cuenta sin empresa vinculada. Estos pasos requieren credenciales reales, que no se agregaron al repositorio.
 
 Referencia oficial: [Google OpenID Connect](https://developers.google.com/identity/openid-connect/openid-connect), [referencia OIDC de Google](https://developers.google.com/identity/openid-connect/reference).
 

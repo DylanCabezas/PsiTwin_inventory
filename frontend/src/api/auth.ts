@@ -22,6 +22,8 @@ function aDatosSesion(raw: MeResponseRaw): DatosSesion {
 }
 
 export const authApi = {
+  resendVerification: (correo: string) => api.post<{ message: string }>('/auth/verification/resend', { correo }, { auth: false }),
+  confirmVerification: (token: string) => api.post<{ message: string }>('/auth/verification/confirm', { token }, { auth: false }),
   fromGoogle: (raw: LoginResponseRaw): LoginResult => {
     if (!raw.access_token) throw new ApiError(500, 'El servidor no devolvió la sesión.', {}, raw)
     return { token: raw.access_token, ...aDatosSesion(raw) }
@@ -93,26 +95,7 @@ export function useLogin() {
   })
 }
 
-/**
- * Registra la empresa y, a continuación, inicia sesión con las mismas credenciales.
- * Si el registro funciona pero el login automático falla, devuelve `token: null`
- * (la página debe enviar al usuario a /login).
- */
+/** El registro queda pendiente hasta abrir el enlace de correo. */
 export function useRegister() {
-  const aplicar = useAplicarLogin()
-  return useMutation({
-    mutationFn: async (body: RegisterBody) => {
-      const empresa = await authApi.register(body)
-      let login: LoginResult | null = null
-      try {
-        login = await authApi.login({ correo: body.correo, password: body.password })
-      } catch (err) {
-        console.warn('[auth] registro correcto, pero el login automático falló', err)
-      }
-      return { empresa, token: login?.token ?? null, login }
-    },
-    onSuccess: ({ empresa, login }) => {
-      if (login) aplicar({ ...login, empresa: login.empresa ?? empresa })
-    },
-  })
+  return useMutation({ mutationFn: authApi.register })
 }

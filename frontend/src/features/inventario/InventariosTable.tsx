@@ -1,3 +1,4 @@
+import { inventarioDetalleId } from '@/api/inventarios'
 /**
  * Tabla de inventarios. Todos ven «Historial» (quién lo creó / cambió límites + movimientos con autor).
  * Solo el OPERARIO tiene además: registrar salida, editar mínimo/máximo y eliminar (409 si aún tiene stock).
@@ -99,7 +100,7 @@ export function InventariosTable({ data, caption, loading, error, onRetry, empty
   const confirmarEliminar = () => {
     if (!aEliminar) return
     setErrorEliminar(null)
-    eliminar.mutate(aEliminar.id_inventario, {
+    eliminar.mutate(inventarioDetalleId(aEliminar), {
       onSuccess: () => {
         setAEliminar(null)
         toast.success('Inventario eliminado')
@@ -120,7 +121,7 @@ export function InventariosTable({ data, caption, loading, error, onRetry, empty
         error={error}
         {...(onRetry ? { onRetry } : {})}
         empty={empty}
-        rowKey={(inv) => inv.id_inventario}
+        rowKey={inventarioDetalleId}
         columns={columnas}
         actions={(inv) => (
           <>
@@ -220,7 +221,7 @@ function resumenCambio(antes: Record<string, unknown> | null, despues: Record<st
 
 /** Quién creó / cambió los límites del inventario y sus movimientos de stock (autor, antes → después). */
 function HistorialInventario({ inventario }: { inventario: Inventario }) {
-  const histQ = useInventarioHistorial(inventario.id_inventario)
+  const histQ = useInventarioHistorial(inventarioDetalleId(inventario))
   const movQ = useMovimientosPorInventario(inventario.id_inventario)
   const cambios = [...(histQ.data ?? [])].sort((a, b) => b.fecha.localeCompare(a.fecha))
   return (
@@ -251,7 +252,7 @@ function HistorialInventario({ inventario }: { inventario: Inventario }) {
         </h3>
         <MovimientosTable
           caption="Movimientos del inventario"
-          data={movQ.data}
+          data={movQ.data?.filter(m => m.id_detalle_inventario ? m.id_detalle_inventario === inventarioDetalleId(inventario) : m.id_producto === inventario.id_producto && m.id_rack === inventario.id_rack)}
           ocultarProducto
           loading={movQ.isLoading}
           error={movQ.error}

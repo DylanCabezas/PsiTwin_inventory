@@ -6,7 +6,6 @@
       "registro",
       "registrar",
       "perfil",
-      "google",
       "cuenta"
     ],
     "route": "/perfil",
@@ -14,7 +13,7 @@
       "EMPRESA"
     ],
     "source": "src/features/auth/RegistroPage.tsx; src/features/perfil/PerfilPage.tsx",
-    "answer": "Para registrar una empresa, abre Registro, completa nombre de empresa, nombre del CEO (puede ser solo su nombre), RUC, sector y teléfono, y pulsa Continuar con Google. El correo proviene de Google. Las cuentas anteriores conservan el acceso con contraseña. En Perfil puedes editar los datos, cambiar contraseña y vincular Google confirmando tu contraseña actual."
+    "answer": "Para registrar una empresa, completa sus datos, el nombre del CEO, RUC, sector, telefono, Gmail y ambas contrasenas de PsiTwin. Pulsa Registrar empresa y abre el enlace de verificacion que llega a tu correo para activar la cuenta. Despues inicia sesion con Gmail y contrasena de PsiTwin. No necesitas Google OAuth. En Perfil puedes editar los datos y cambiar tu contrasena."
   },
   {
     "id": "productos",

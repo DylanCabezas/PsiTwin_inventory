@@ -1,14 +1,4 @@
-/**
- * Inventarios (stock real por producto y rack).
- *   POST /inventarios · GET /inventarios · GET /inventarios/stock-bajo · GET /inventarios/sin-stock
- *   GET /inventarios/sobre-stock · GET /inventarios/producto/{id_producto} · GET /inventarios/rack/{id_rack}
- *   GET /inventarios/{id} · PUT /inventarios/{id} · DELETE /inventarios/{id}
- *
- *   GET /inventarios/{id}/historial → quién lo creó / cambió sus límites
- *
- * EMPRESA: solo lectura. OPERARIO (su almacén): crear, editar límites (mín/máx) y borrar sin stock.
- * El stock solo cambia por recepciones y movimientos. PROVEEDOR: sin acceso (los hooks quedan deshabilitados).
- */
+/** Stock por producto/rack: /detalles-inventario. /inventarios representa la cabecera del almacén. */
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/auth/SessionContext'
 import { api, seg } from './client'
@@ -16,21 +6,30 @@ import { norm } from './normalize'
 import { queryKeys } from './queryKeys'
 import type { Inventario, InventarioCreate, InventarioHistorial, InventarioUpdate } from './types'
 
+/** Stable row identity; the fallback supports older cached UI fixtures. */
+export const inventarioDetalleId = (inv: Inventario) => inv.id_detalle_inventario ?? inv.id_inventario
+
 export const inventariosApi = {
-  create: async (body: InventarioCreate): Promise<Inventario> => norm.inventario.one(await api.post('/inventarios', body)),
-  list: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/inventarios')),
-  listStockBajo: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/inventarios/stock-bajo')),
-  listSinStock: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/inventarios/sin-stock')),
-  listSobreStock: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/inventarios/sobre-stock')),
+  create: async (body: InventarioCreate): Promise<Inventario> => {
+    const { id_almacen, id_producto, id_rack, stock_actual, stock_minimo, stock_maximo } = body
+    const header = await api.post<{ id_inventario: string }>('/inventarios', { id_almacen })
+    return norm.inventario.one(await api.post('/detalles-inventario', {
+      id_inventario: header.id_inventario, id_producto, id_rack, stock_actual, stock_minimo, stock_maximo,
+    }))
+  },
+  list: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/detalles-inventario')),
+  listStockBajo: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/detalles-inventario/stock-bajo')),
+  listSinStock: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/detalles-inventario/sin-stock')),
+  listSobreStock: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/detalles-inventario/sobre-stock')),
   listByProducto: async (idProducto: string): Promise<Inventario[]> =>
-    norm.inventario.list(await api.get(`/inventarios/producto/${seg(idProducto)}`)),
+    norm.inventario.list(await api.get(`/detalles-inventario/producto/${seg(idProducto)}`)),
   listByRack: async (idRack: string): Promise<Inventario[]> =>
-    norm.inventario.list(await api.get(`/inventarios/rack/${seg(idRack)}`)),
-  get: async (id: string): Promise<Inventario> => norm.inventario.one(await api.get(`/inventarios/${seg(id)}`)),
+    norm.inventario.list(await api.get(`/detalles-inventario/rack/${seg(idRack)}`)),
+  get: async (id: string): Promise<Inventario> => norm.inventario.one(await api.get(`/detalles-inventario/${seg(id)}`)),
   update: async (id: string, body: InventarioUpdate): Promise<Inventario> =>
-    norm.inventario.one(await api.put(`/inventarios/${seg(id)}`, body)),
-  remove: (id: string) => api.delete<unknown>(`/inventarios/${seg(id)}`),
-  historial: (id: string) => api.get<InventarioHistorial[]>(`/inventarios/${seg(id)}/historial`),
+    norm.inventario.one(await api.put(`/detalles-inventario/${seg(id)}`, body)),
+  remove: (id: string) => api.delete<unknown>(`/detalles-inventario/${seg(id)}`),
+  historial: (id: string) => api.get<InventarioHistorial[]>(`/detalles-inventario/${seg(id)}/historial`),
 }
 
 const usePuedeVer = () => useSession().rol !== 'PROVEEDOR'
@@ -100,7 +99,7 @@ export function useUpdateInventario() {
   return useMutation({
     mutationFn: ({ id, body }: { id: string; body: InventarioUpdate }) => inventariosApi.update(id, body),
     onSuccess: (inv) => {
-      qc.setQueryData(queryKeys.inventarios.detail(inv.id_inventario), inv)
+      qc.setQueryData(queryKeys.inventarios.detail(inventarioDetalleId(inv)), inv)
       return Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.inventarios.all }),
       ])

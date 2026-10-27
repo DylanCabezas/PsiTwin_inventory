@@ -134,6 +134,19 @@
   --shadow-pop: 0 12px 32px -8px rgb(var(--shadow-color) / 0.28), 0 2px 6px rgb(var(--shadow-color) / 0.1);
 }
 
+/* Authentication retains PsiTwin's dark and gold identity independently of OS theme. */
+.auth-theme {
+  --bg: #141311; --surface: #1c1b18; --surface-2: #24221f; --surface-3: #2d2a26;
+  --border: #35322c; --border-strong: #4d4841;
+  --fg: #ece8e1; --fg-muted: #b3aca0; --fg-subtle: #8f887c;
+  --accent: #f5b133; --accent-hover: #ffc355; --accent-fg: #1a1400;
+  --accent-soft: #3a2c0e; --accent-ink: #f5c265;
+  --success: #62c28d; --success-soft: #15301f;
+  --danger: #f07a6e; --danger-soft: #3d1a16; --danger-hover: #ff9589;
+  --sidebar: #0e0d0c; --sidebar-2: #1f1d1a; --sidebar-fg: #e2ddd3; --sidebar-muted: #938c80;
+  --focus: #74b2ea; color-scheme: dark;
+}
+
 @theme {
   --font-sans: 'IBM Plex Sans', 'Inter', 'Segoe UI', system-ui, -apple-system, 'Helvetica Neue', Arial, sans-serif;
   --font-mono: 'IBM Plex Mono', 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;

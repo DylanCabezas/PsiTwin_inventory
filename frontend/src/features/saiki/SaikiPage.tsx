@@ -62,7 +62,7 @@ export default function SaikiPage() {
           <div className="space-y-4">
             {session.sensorContext?.id_dispositivo && <div className="rounded-lg bg-blue-500/5 p-3 text-sm"><p>La conversación sigue el equipo que seleccionaste en los gráficos.</p><Button size="sm" variant="ghost" onClick={() => session.setSensorContext(undefined)}>Quitar equipo seleccionado</Button></div>}
             <Field label="Producto"><ProductoSelect value={session.idProducto} onChange={event => { session.setIdProducto(event.target.value); session.setIdInventario('') }} /></Field>
-            <Field label="Inventario"><InventarioSelect idProducto={session.idProducto || undefined} value={session.idInventario} onChange={event => session.setIdInventario(event.target.value)} /></Field>
+            <Field label="Inventario"><InventarioSelect valueKind="inventario" idProducto={session.idProducto || undefined} value={session.idInventario} onChange={event => session.setIdInventario(event.target.value)} /></Field>
             {(session.idProducto || session.idInventario) && <Button variant="ghost" size="sm" onClick={() => { session.setIdProducto(''); session.setIdInventario('') }}>Quitar contexto</Button>}
           </div>
         </Card>

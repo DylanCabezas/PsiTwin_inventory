@@ -6,8 +6,7 @@ from typing import (
 from pydantic import (
     BaseModel,
     EmailStr,
-    Field,
-    field_validator
+    Field
 )
 
 from app.dto.empresa_dto import (
@@ -32,13 +31,6 @@ from app.dto.proveedor_dto import (
 class LoginRequest(BaseModel):
 
     correo: EmailStr
-
-    @field_validator('correo')
-    @classmethod
-    def gmail_only(cls, value):
-        if str(value).rsplit('@', 1)[-1].lower() != 'gmail.com':
-            raise ValueError('Usa tu correo de Gmail (@gmail.com)')
-        return value
 
     password: str = Field(
         ...,

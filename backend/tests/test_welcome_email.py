@@ -179,7 +179,9 @@ def test_registration_and_retry_routes_keep_tenant_and_existing_company(configur
     service = welcome.WelcomeEmailService(lambda: configured, Mock(side_effect=smtplib.SMTPAuthenticationError(535, b'bad')))
     monkeypatch.setattr(controller, 'welcome_email_service', service)
     verification = AsyncMock(return_value={'status': 'SENT'})
-    monkeypatch.setattr(controller.email_verification_service, 'request_entity_verification', verification)
+    monkeypatch.setattr(controller.link_service, 'send', verification)
+    from types import SimpleNamespace
+    monkeypatch.setattr(controller, 'get_database', lambda: SimpleNamespace(empresas=SimpleNamespace(create_index=AsyncMock()), email_verifications=SimpleNamespace(create_index=AsyncMock())))
     monkeypatch.setattr(empresa_service.empresa_repository, 'find_by_email', AsyncMock(return_value=None))
     monkeypatch.setattr(empresa_service.empresa_repository, 'find_by_ruc', AsyncMock(return_value=None))
     monkeypatch.setattr(empresa_service, 'validar_correo_disponible', AsyncMock())
@@ -190,9 +192,9 @@ def test_registration_and_retry_routes_keep_tenant_and_existing_company(configur
     app = FastAPI(); app.include_router(controller.router)
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
-            response = await client.post('/auth/register', json={k: COMPANY[k] for k in ('nombre', 'nombre_ceo', 'correo', 'sector', 'telefono', 'ruc')} | {'password': 'secure-test'})
+            response = await client.post('/auth/register', json={k: COMPANY[k] for k in ('nombre', 'nombre_ceo', 'correo', 'sector', 'telefono', 'ruc')} | {'password': 'secure-test', 'password_confirmation': 'secure-test', 'correo': 'carlos@gmail.com', 'ruc': '20100070970'})
             assert response.status_code == 201 and response.json()['nombre_ceo'] == 'Carlos'
-            verification.assert_awaited_once_with('empresa', 'e')
+            verification.assert_awaited_once_with(COMPANY['correo'])
             assert create.call_args.args[0]['nombre_ceo'] == 'Carlos'
             assert (await service.status('e'))['status'] == 'PENDIENTE'
             assert (await client.post('/empresas/me/bienvenida/reintentar')).status_code in (401, 403)

@@ -7,6 +7,7 @@ const BINDING = 'psitwin.google.binding'
 const TICKET = 'psitwin.google.registration'
 const DRAFT = 'psitwin.google.company'
 const EMAIL = 'psitwin.google.email'
+const ERROR = 'psitwin.google.error'
 export function googleBinding() {
   let binding = sessionStorage.getItem(BINDING)
   if (!binding) {
@@ -16,6 +17,7 @@ export function googleBinding() {
   return binding
 }
 export async function startGoogle(company?: GoogleCompany, password?: string, newPassword?: string) {
+  sessionStorage.removeItem(ERROR)
   sessionStorage.removeItem(TICKET)
   sessionStorage.removeItem(EMAIL)
   const binding = googleBinding()
@@ -41,10 +43,17 @@ export function saveGoogleRegistration(ticket: string, email?: string, company?:
   if (company) sessionStorage.setItem(DRAFT, JSON.stringify(company))
 }
 export function saveGoogleDraft(company: GoogleCompany) { sessionStorage.setItem(DRAFT, JSON.stringify(company)) }
-export function clearGoogleFlow() { for (const key of [BINDING, TICKET, DRAFT, EMAIL]) sessionStorage.removeItem(key) }
-export async function finishGoogleRegistration(company: GoogleCompany, registrationPassword?: string) {
+export function googleFlowError() { return sessionStorage.getItem(ERROR) ?? '' }
+export function saveGoogleFlowError(message: string) { sessionStorage.setItem(ERROR, message) }
+export function clearGoogleFlowError() { sessionStorage.removeItem(ERROR) }
+export function clearGoogleFlow() { for (const key of [BINDING, TICKET, DRAFT, EMAIL, ERROR]) sessionStorage.removeItem(key) }
+export function clearGoogleVerification() { for (const key of [TICKET, EMAIL]) sessionStorage.removeItem(key) }
+export async function checkGoogleRegistration() {
+  return await api.post<{ verified_email: string; company: GoogleCompany | null }>('/auth/google/registration/status', { binding: googleBinding(), registration_ticket: pendingGoogleRegistration() }, { auth: false })
+}
+export async function finishGoogleRegistration(company: GoogleCompany, registrationPassword: string, confirmation: string) {
   try {
-    return await api.post<GoogleResult>('/auth/google/register', { company, ...(registrationPassword ? { registration_password: registrationPassword } : {}), binding: googleBinding(), registration_ticket: pendingGoogleRegistration() }, { auth: false })
+    return await api.post<GoogleResult>('/auth/google/register', { company, registration_password: registrationPassword, registration_password_confirmation: confirmation, binding: googleBinding(), registration_ticket: pendingGoogleRegistration() }, { auth: false })
   } catch (error) {
     if (error instanceof ApiError && [400, 409].includes(error.status)) sessionStorage.removeItem(TICKET)
     throw error

@@ -1,6 +1,8 @@
 # app/main.py
 
 from contextlib import asynccontextmanager
+from fastapi.exceptions import RequestValidationError
+from fastapi.exception_handlers import request_validation_exception_handler
 from app.utils.log_redaction import install_auth_log_redaction
 
 install_auth_log_redaction()
@@ -128,7 +130,6 @@ from app.controllers.saiki_controller import (
     router as saiki_router
 )
 from app.controllers.analisis_controller import router as analisis_router
-from app.controllers.google_auth_controller import router as google_auth_router
 
 # NUEVO:
 # Controller temporal para probar el historial
@@ -201,7 +202,17 @@ app = FastAPI(
         lifespan
 )
 
-app.include_router(google_auth_router, prefix=settings.api_prefix)
+@app.exception_handler(RequestValidationError)
+async def private_auth_validation_errors(request: Request, exc: RequestValidationError):
+    if '/auth/' in request.url.path or request.url.path.endswith('/password'):
+        # Pydantic's default "input" may contain an entire password-bearing body.
+        return JSONResponse(status_code=422, content={'detail': [
+            {key: item[key] for key in ('loc', 'msg', 'type') if key in item}
+            for item in exc.errors()
+        ]})
+    return await request_validation_exception_handler(request, exc)
+
+# Google OAuth routes retired. Existing identity fields remain untouched.
 
 
 # ============================================================

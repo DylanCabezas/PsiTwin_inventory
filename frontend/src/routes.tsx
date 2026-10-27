@@ -13,7 +13,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { NotFoundPage, RouteError } from '@/components/layout/RouteError'
 import LoginPage from '@/features/auth/LoginPage'
 import RegistroPage from '@/features/auth/RegistroPage'
-import GoogleCallbackPage from '@/features/auth/GoogleCallbackPage'
+import VerifyEmailPage from '@/features/auth/VerifyEmailPage'
 import CambiarPasswordPage from '@/features/cuenta/CambiarPasswordPage'
 import InicioPorRol from '@/features/inicio/InicioPorRol'
 import OnboardingAlmacenPage from '@/features/onboarding/OnboardingAlmacenPage'
@@ -27,7 +27,7 @@ export const routes: RouteObject[] = [
   {
     errorElement: <RouteError />,
     children: [
-      { path: '/auth/google/callback', element: <GoogleCallbackPage /> },
+      { path: '/verificar-correo', element: <VerifyEmailPage /> },
       {
         element: <PublicOnly />,
         children: [

@@ -105,7 +105,7 @@ function fechaAIso(v: string): string | null {
   return Number.isNaN(d.getTime()) ? null : d.toISOString()
 }
 
-function aDetalleCreate(l: LineaIn, idInventario: string): DetalleRecepcionCreate {
+function aDetalleCreate(l: LineaIn, idInventario: string, idDetalleInventario?: string): DetalleRecepcionCreate {
   const t = l.temperatura_recepcion.trim()
   const comentario = l.comentario_recepcion.trim() || null
   const recibida = num(l.cantidad_recibida)
@@ -114,6 +114,7 @@ function aDetalleCreate(l: LineaIn, idInventario: string): DetalleRecepcionCreat
   return {
     id_detalle_reposicion: l.id_detalle_reposicion,
     id_inventario: idInventario,
+    ...(idDetalleInventario ? { id_detalle_inventario: idDetalleInventario } : {}),
     cantidad_recibida: recibida,
     cantidad_rechazada: rechazada,
     motivo_rechazo: rechazada > 0 ? comentario : null,
@@ -349,13 +350,14 @@ function RecepcionForm({
         const inv =
           enRack.find((i) => i.id_producto === idProducto) ??
           (await crearInv.mutateAsync({
+            id_almacen: orden.id_almacen,
             id_producto: idProducto,
             id_rack: l.id_rack,
             stock_actual: 0,
             stock_minimo: l.stock_minimo.trim() === '' ? 0 : num(l.stock_minimo),
             stock_maximo: l.stock_maximo.trim() === '' ? Math.max(u, 1) : num(l.stock_maximo),
           }))
-        detalles.push(aDetalleCreate(l, inv.id_inventario))
+        detalles.push(aDetalleCreate(l, inv.id_inventario, inv.id_detalle_inventario))
       }
       const rec = await crear.mutateAsync({
         id_orden_reposicion: orden.id_orden_reposicion,

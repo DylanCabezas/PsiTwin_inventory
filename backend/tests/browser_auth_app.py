@@ -13,6 +13,7 @@ from app.database import mongodb
 from app.config.settings import settings
 from app.services import welcome_email_service
 from app.services.google_auth_service import GoogleAuthService
+from app.services import registration_link_service
 
 messages = []
 smtp_fails = False
@@ -28,6 +29,7 @@ async def simulated_identity(self, code, flow):
     return {'sub': 'browser-test-google-subject', 'email': 'psitwin.browser.test@gmail.com'}
 
 welcome_email_service.send_message = capture_smtp
+registration_link_service.send_message = capture_smtp
 GoogleAuthService.identity = simulated_identity
 from app.main import app
 
@@ -45,6 +47,20 @@ async def isolated_lifespan(_):
         client.close()
 
 app.router.lifespan_context = isolated_lifespan
+
+@app.get('/__test/verification-link')
+async def verification_link():
+    import re
+    for message in reversed(messages):
+        match = re.search(r'https?://[^\s]+/verificar-correo#token=[^\s]+', message.get_content()) if not message.is_multipart() else None
+        if match:
+            return {'url': match[0]}
+    return {'url': None}
+
+@app.post('/__test/allow-resend')
+async def allow_resend():
+    await mongodb.database.empresas.update_many({}, {'$unset': {'verificacion_reenvio_despues': ''}})
+    return {'ok': True}
 
 @app.post('/__test/reset')
 async def reset():
@@ -75,5 +91,5 @@ async def status():
             'google_linked': bool(company and company.get('google_sub')),
             'argon2id': bool(company and company.get('password', '').startswith('$argon2id$')),
             'sent': len(messages),
-            'personalized': bool(messages and 'Carlos' in messages[-1].get_body(preferencelist=('html',)).get_content() and '{{nombre}}' not in messages[-1].get_body(preferencelist=('html',)).get_content()),
+            'personalized': bool(messages and messages[-1].get_body(preferencelist=('html',)) and 'Carlos' in messages[-1].get_body(preferencelist=('html',)).get_content() and '{{nombre}}' not in messages[-1].get_body(preferencelist=('html',)).get_content()),
             'sender': str(messages[-1]['From']) if messages else None}

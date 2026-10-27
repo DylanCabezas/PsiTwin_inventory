@@ -1,3 +1,4 @@
+import { inventarioDetalleId } from '@/api/inventarios'
 /**
  * Formularios de inventario.
  *
@@ -113,7 +114,7 @@ function CrearInner({ productoFijo, onSuccess, onCancel, defaults }: InventarioC
       setError('stock_actual', { message: `Pesa ${formatNumero(carga)} kg y el rack solo soporta ${formatNumero(libre)} kg más` }, { shouldFocus: true })
       return
     }
-    const body: InventarioCreate = values
+    const body: InventarioCreate = { ...values, id_almacen: idAlmacen }
     try {
       const inv = await crear.mutateAsync(body)
       toast.success('Inventario creado')
@@ -216,7 +217,7 @@ export function InventarioLimitesForm({ inventario, onSuccess, onCancel }: Inven
     apiError.clear()
     const body: InventarioUpdate = values
     try {
-      const inv = await actualizar.mutateAsync({ id: inventario.id_inventario, body })
+      const inv = await actualizar.mutateAsync({ id: inventarioDetalleId(inventario), body })
       toast.success('Límites de stock actualizados')
       onSuccess?.(inv)
     } catch (e) {

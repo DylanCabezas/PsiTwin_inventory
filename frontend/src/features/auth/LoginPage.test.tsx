@@ -7,17 +7,17 @@ vi.mock('@/api/auth', () => ({ useLogin: () => ({ mutate: vi.fn(), isPending: fa
 vi.mock('@/components/ui', async original => ({ ...await original<typeof import('@/components/ui')>(), useApiErrorHandler: () => vi.fn() }))
 
 describe('Gmail and PsiTwin password login', () => {
-  it('supports both Google and Gmail with the registered password', () => {
+  it('shows only email and PsiTwin password without a Google login button', () => {
     const html = renderToStaticMarkup(<MemoryRouter><LoginPage /></MemoryRouter>)
     expect(html).toContain('Correo Gmail')
     expect(html).toContain('usuario@gmail.com')
     expect(html).toContain('name="password"')
-    expect(html).toContain('Iniciar sesión con Google')
+    expect(html).not.toContain('Iniciar sesión con Google')
     expect(html).not.toContain('O ingresa')
   })
-  it('requires the exact gmail.com domain and a password', () => {
-    for (const email of ['ceo@gmail.com', 'CEO@GMAIL.COM']) expect(loginSchema.safeParse({ correo: email, password: 'registered-password' }).success).toBe(true)
-    for (const email of ['ceo@example.com', 'ceo@gmail.com.attacker.test', 'ceo@notgmail.com']) expect(loginSchema.safeParse({ correo: email, password: 'registered-password' }).success).toBe(false)
+  it('preserves legacy issued email credentials and requires a password', () => {
+    for (const email of ['ceo@gmail.com', 'CEO@GMAIL.COM', 'operario@example.com', 'proveedor@example.org']) expect(loginSchema.safeParse({ correo: email, password: 'registered-password' }).success).toBe(true)
+    for (const email of ['not-an-email', 'ceo@', '']) expect(loginSchema.safeParse({ correo: email, password: 'registered-password' }).success).toBe(false)
     expect(loginSchema.safeParse({ correo: 'ceo@gmail.com', password: '' }).success).toBe(false)
   })
 })

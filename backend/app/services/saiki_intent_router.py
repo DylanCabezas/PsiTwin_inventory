@@ -30,6 +30,8 @@ class SaikiIntentRouter:
             return SaikiIntent('identity', frozenset())
         if re.fullmatch(r'(muchas )?gracias( saiki)?|adios( saiki)?|hasta luego|nos vemos', plain):
             return SaikiIntent('courtesy', frozenset())
+        if re.search(r'como\s+(?:creo|registro|agrego|veo|consulto|interpreto)\b', text):
+            return SaikiIntent('platform_help', frozenset())
         if re.search(r'como (?:puedo |se |hago para |podria )?(?:crear|registrar|agregar|anadir|editar|eliminar|ver|consultar|administrar|gestionar|usar|utilizar|configurar|vincular)|pasos para|donde (?:creo|registro|agrego)|como funciona|ayuda (?:con|para)|funciones de psitwin|limitaciones de psitwin', text):
             return SaikiIntent('platform_help', frozenset())
         if re.search(r'operario|empleado|personal', text):

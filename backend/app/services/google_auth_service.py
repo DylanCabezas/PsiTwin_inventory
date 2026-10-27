@@ -149,9 +149,7 @@ class GoogleAuthService:
                 raise HTTPException(409, 'Esta identidad ya está vinculada.') from exc
             return self.session(company)
         if linked:
-            if flow.get('purpose') == 'register':
-                raise HTTPException(409, 'Esta cuenta Google ya está registrada. Inicia sesión para acceder a tu empresa.')
-            return self.session(linked)
+            raise HTTPException(409, 'Esta cuenta Google ya está registrada. Inicia sesión con tu correo y contraseña de PsiTwin.')
         if identity['email'].rsplit('@', 1)[-1].lower() != 'gmail.com':
             raise HTTPException(422, 'Registra tu empresa con una cuenta Gmail (@gmail.com).')
         ticket = secrets.token_urlsafe(32)
@@ -170,7 +168,18 @@ class GoogleAuthService:
         if details is None:
             raise HTTPException(422, 'Completa los datos de tu empresa.')
         linked = await self.database()['empresas'].find_one({'google_sub': flow['identity']['sub']})
-        return self.session(linked) if linked else await self.register(flow['identity'], details, password_hash=password_hash)
+        if linked:
+            raise HTTPException(409, 'Esta cuenta ya está registrada. Inicia sesión con tu correo y contraseña de PsiTwin.')
+        return await self.register(flow['identity'], details, password_hash=password_hash)
+
+    async def registration_status(self, ticket, binding):
+        flow = await self.database()['google_oauth_flows'].find_one({
+            '_id': digest(ticket), 'binding': digest(binding), 'status': 'REGISTRATION',
+            'expires_at': {'$gt': datetime.now(timezone.utc)},
+        })
+        if not flow:
+            raise HTTPException(400, 'La verificación de Gmail expiró o ya fue utilizada. Verifica nuevamente tu correo.')
+        return {'verified_email': flow['identity']['email'], 'company': flow.get('company')}
 
     async def register(self, identity, details, password_hash=None):
         if identity['email'].rsplit('@', 1)[-1].lower() != 'gmail.com':
@@ -191,8 +200,6 @@ class GoogleAuthService:
         try:
             await db['empresas'].insert_one(company)
         except DuplicateKeyError as exc:
-            linked = await db['empresas'].find_one({'google_sub': identity['sub']})
-            if linked: return self.session(linked)
             raise HTTPException(409, 'La empresa ya fue registrada.') from exc
         try:
             await WelcomeEmailService(self.database).enqueue(company)

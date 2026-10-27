@@ -246,6 +246,7 @@ async def register_empresa(
     ).isoformat()
 
     empresa = {
+        "requiere_verificacion_registro": True,
 
         "id_empresa":
             str(
@@ -358,6 +359,9 @@ async def login_empresa(
                 "Correo o contraseña incorrectos"
             )
         )
+
+    if empresa.get('requiere_verificacion_registro') is True and empresa.get('correo_verificado') is not True:
+        raise HTTPException(403, 'Verifica tu correo antes de iniciar sesión.')
 
     token = create_access_token(
         empresa[

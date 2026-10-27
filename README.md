@@ -1,5 +1,19 @@
 # PsiTwin Inventory
 
+Evaluación para tienda: [informe de pruebas](docs/INFORME_PRUEBAS_INTEGRALES_PSITWIN.md),
+[guía de visita](docs/GUIA_VISITA_TIENDA_PSITWIN.md),
+[checklist](docs/CHECKLIST_DATOS_TIENDA.md),
+[entrevista](docs/PREGUNTAS_DUENO_TIENDA.md) y
+[plantillas Excel/CSV](docs/plantillas_tienda/LEEME.md).
+El bloqueo de inventario detectado en la evaluacion ya fue corregido: consulta
+[la correccion y pruebas](docs/CORRECCION_INVENTARIO_FRONTEND.md). Los demas
+hallazgos pendientes permanecen documentados en el informe.
+
+Registro vigente: Gmail y contraseña de PsiTwin, activación por enlace de correo
+y bienvenida mediante Gmail SMTP, sin Google OAuth. Consulta la
+[configuración y pruebas](docs/REGISTRO_GMAIL_SMTP.md). En Git Bash inicia con
+`./iniciar.cmd`.
+
 Sistema de inventario inteligente para equipos de frío: backend (FastAPI + MongoDB + MQTT) y frontend (React + Vite).
 
 ## Estructura

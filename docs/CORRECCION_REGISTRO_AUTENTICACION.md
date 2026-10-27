@@ -1,3 +1,7 @@
+> Flujo sustituido: consulta [Registro Gmail por SMTP, sin OAuth](REGISTRO_GMAIL_SMTP.md). Este documento conserva detalles historicos.
+
+> Informe historico: sustituido por [Registro unico Gmail](REGISTRO_UNICO_GMAIL.md). El login actual no ofrece Google y el registro tiene una sola pagina.
+
 # Corrección de registro y autenticación — 27 de octubre de 2026
 
 ## Resultado

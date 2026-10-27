@@ -54,6 +54,60 @@ def app():
 def state(url): return parse_qs(urlsplit(url).query)['state'][0]
 
 
+def test_registration_status_cannot_be_forged_or_reused(monkeypatch):
+    async def run():
+        async with isolated_database(monkeypatch) as db:
+            monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'status-sub', 'email': 'carlos@gmail.com'}))
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
+                for initial in ({'binding': BINDING}, {'binding': BINDING, 'company': DETAILS, 'purpose': 'login'}):
+                    assert (await client.post('/auth/google/start', json=initial)).status_code == 422
+                initial = await client.post('/auth/google/start', json={'binding': BINDING, 'company': DETAILS})
+                complete = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(initial.json()['authorization_url']), 'code': 'controlled-code'})
+                ticket = complete.json()['registration_ticket']
+                body = {'binding': BINDING, 'registration_ticket': ticket}
+                valid = await client.post('/auth/google/registration/status', json=body)
+                assert valid.json() == {'verified_email': 'carlos@gmail.com', 'company': DETAILS}
+                assert (await client.post('/auth/google/registration/status', json={**body, 'binding': 'x'*64})).status_code == 400
+                assert (await client.post('/auth/google/registration/status', json={**body, 'registration_ticket': 'forged-ticket-not-issued-by-server'})).status_code == 400
+                await db.google_oauth_flows.update_one({'_id': digest(ticket)}, {'$set': {'expires_at': datetime.now(timezone.utc)-timedelta(seconds=1)}})
+                assert (await client.post('/auth/google/registration/status', json=body)).status_code == 400
+                assert (await client.post('/auth/google/register', json={**body, 'company': DETAILS, 'registration_password': 'secure-password-2026', 'registration_password_confirmation': 'different-password'})).status_code == 422
+                assert await db.empresas.count_documents({}) == 0
+    asyncio.run(run())
+
+
+def test_auth_validation_errors_do_not_echo_passwords():
+    from app.main import app as full_app
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=full_app), base_url='http://test') as client:
+            result = await client.post('/api/v1/auth/register', json={'password': 'sensitive-password-2026', 'password_confirmation': 'different-sensitive-password'})
+            assert result.status_code == 422
+            assert 'sensitive-password' not in result.text and 'input' not in result.text
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize('role,email', [('OPERARIO', 'operario@example.com'), ('PROVEEDOR', 'proveedor@example.org')])
+def test_legacy_operator_and_supplier_password_login_preserves_roles(monkeypatch, role, email):
+    async def run():
+        async with isolated_database(monkeypatch) as db:
+            now = datetime.now(timezone.utc)
+            await db.empresas.insert_one({**DETAILS, 'id_empresa': 'legacy', 'correo': 'legacy@example.com', 'fecha_creacion': now, 'fecha_actualizacion': now})
+            common = {'id_empresa': 'legacy', 'correo': email, 'nombre': 'Cuenta', 'estado': 'ACTIVO', 'tiene_cuenta': True, 'debe_cambiar_password': False, 'password_hash': hash_password('legacy-password'), 'fecha_creacion': now, 'fecha_actualizacion': now}
+            if role == 'OPERARIO':
+                await db.operarios.insert_one({**common, 'id_operario': 'operator', 'apellido': 'Prueba', 'cargo': 'Operario', 'turno': 'Dia', 'id_almacen': 'warehouse'})
+            else:
+                await db.proveedores.insert_one({**common, 'id_proveedor': 'supplier', 'ruc': '20123456789', 'tiempo_entrega_estimado_dias': 2})
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
+                login = await client.post('/auth/login', json={'correo': email, 'password': 'legacy-password'})
+                assert login.status_code == 200, login.text
+                assert login.json()['rol'] == role and login.json()['empresa']['id_empresa'] == 'legacy'
+                headers = {'Authorization': 'Bearer '+login.json()['access_token']}
+                me = await client.get('/auth/me', headers=headers)
+                assert me.status_code == 200 and me.json()['rol'] == role
+                assert (await client.get('/empresas/me', headers=headers)).status_code == 403
+    asyncio.run(run())
+
+
 def test_registration_requires_password_and_uses_server_business_snapshot(monkeypatch):
     async def run():
         async with isolated_database(monkeypatch) as db:
@@ -67,11 +121,11 @@ def test_registration_requires_password_and_uses_server_business_snapshot(monkey
                 finish = {'binding': BINDING, 'registration_ticket': data['registration_ticket'], 'company': {**DETAILS, 'nombre': 'Alterado'}}
                 for invalid in ({}, {'registration_password': 'short'}):
                     assert (await client.post('/auth/google/register', json={**finish, **invalid})).status_code == 422
-                result = await client.post('/auth/google/register', json={**finish, 'registration_password': 'secure-password-2026'})
+                result = await client.post('/auth/google/register', json={**finish, 'registration_password': 'secure-password-2026', 'registration_password_confirmation': 'secure-password-2026'})
                 assert result.status_code == 200 and result.json()['empresa']['nombre'] == DETAILS['nombre']
                 stored = await db.empresas.find_one({})
                 assert stored['password'].startswith('$argon2id$')
-                assert (await client.post('/auth/google/register', json={**finish, 'registration_password': 'secure-password-2026'})).status_code == 400
+                assert (await client.post('/auth/google/register', json={**finish, 'registration_password': 'secure-password-2026', 'registration_password_confirmation': 'secure-password-2026'})).status_code == 400
                 assert await db.empresas.count_documents({}) == 1
     asyncio.run(run())
 
@@ -88,12 +142,12 @@ def test_auth_query_strings_are_redacted_in_server_logs():
     assert 'private-jwt' not in AccessFormatter().format(access)
 
 
-def test_login_requires_exact_gmail_domain():
+def test_login_preserves_legacy_email_accounts():
     from app.dto.auth_dto import LoginRequest
     from pydantic import ValidationError
-    for email in ('ceo@gmail.com', 'CEO@GMAIL.COM'):
+    for email in ('ceo@gmail.com', 'CEO@GMAIL.COM', 'operario@psitwin.com', 'proveedor@example.com'):
         assert LoginRequest(correo=email, password='registered-password')
-    for email in ('ceo@example.com', 'ceo@gmail.com.attacker.test', 'ceo@notgmail.com'):
+    for email in ('not-an-email', 'ceo@', ''):
         with pytest.raises(ValidationError):
             LoginRequest(correo=email, password='registered-password')
 
@@ -107,14 +161,14 @@ def test_google_registration_rejects_non_gmail_before_creating_company():
     asyncio.run(run())
 
 
-@pytest.mark.parametrize('google_first', [False, True])
-def test_google_registration_enables_chosen_password_after_verified_identity(monkeypatch, google_first):
+@pytest.mark.parametrize('explicit_purpose', [False, True])
+def test_google_registration_enables_chosen_password_after_verified_identity(monkeypatch, explicit_purpose):
     async def run():
         async with isolated_database(monkeypatch) as db:
             monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'password-google-sub', 'email': 'carlos@gmail.com'}))
             password = 'chosen-registration-password'
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
-                initial = {'binding': BINDING} if google_first else {'binding': BINDING, 'company': DETAILS, 'purpose': 'register'}
+                initial = {'binding': BINDING, 'company': DETAILS, **({'purpose': 'register'} if explicit_purpose else {})}
                 start = await client.post('/auth/google/start', json=initial)
                 assert start.status_code == 200
                 flow = await db.google_oauth_flows.find_one({'_id': digest(state(start.json()['authorization_url']))})
@@ -124,7 +178,7 @@ def test_google_registration_enables_chosen_password_after_verified_identity(mon
                 assert result.json()['registration_required']
                 assert result.json()['verified_email'] == 'carlos@gmail.com'
                 assert await db.empresas.count_documents({}) == 0
-                result = await client.post('/auth/google/register', json={'binding': BINDING, 'company': DETAILS, 'registration_password': password, 'registration_ticket': result.json()['registration_ticket']})
+                result = await client.post('/auth/google/register', json={'binding': BINDING, 'company': DETAILS, 'registration_password': password, 'registration_password_confirmation': password, 'registration_ticket': result.json()['registration_ticket']})
                 assert result.status_code == 200
                 assert result.json()['empresa']['password_local_habilitada'] is True
                 assert password not in result.text
@@ -136,8 +190,7 @@ def test_google_registration_enables_chosen_password_after_verified_identity(mon
                 assert (await client.post('/auth/login', json={'correo': 'carlos@gmail.com', 'password': 'incorrect-password'})).status_code == 401
                 # Registering again must never replace the existing account's password.
                 again = await client.post('/auth/google/start', json={'binding': BINDING})
-                confirmed = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(again.json()['authorization_url']), 'code': 'controlled-code'})
-                assert confirmed.status_code == 200
+                assert again.status_code == 422
                 assert controller.verify_password(password, (await db.empresas.find_one({'google_sub': 'password-google-sub'}))['password'])
     asyncio.run(run())
 
@@ -146,7 +199,7 @@ def test_missing_google_configuration_has_explicit_safe_error(monkeypatch):
     monkeypatch.setattr(settings, 'google_client_id', '')
     async def run():
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
-            result = await client.post('/auth/google/start', json={'binding': BINDING})
+            result = await client.post('/auth/google/start', json={'binding': BINDING, 'company': DETAILS})
             assert result.status_code == 503
             assert result.json()['detail']['code'] == 'GOOGLE_NOT_CONFIGURED'
     asyncio.run(run())
@@ -169,7 +222,7 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
                 assert result.status_code == 200
                 assert result.json()['registration_required']
                 assert await db.empresas.count_documents({}) == 0
-                result = await client.post('/auth/google/register', json={'binding': BINDING, 'registration_ticket': result.json()['registration_ticket'], 'registration_password': 'legacy-test-password'})
+                result = await client.post('/auth/google/register', json={'binding': BINDING, 'registration_ticket': result.json()['registration_ticket'], 'registration_password': 'legacy-test-password', 'registration_password_confirmation': 'legacy-test-password'})
                 session = result.json(); token = session['access_token']
                 assert session['empresa']['nombre_ceo'] == 'Carlos' and session['empresa']['correo_verificado']
                 assert 'google_sub' not in session['empresa'] and 'password' not in session['empresa']
@@ -180,11 +233,10 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
                 assert (await client.post('/auth/google/complete', json=payload)).status_code == 400
                 assert await db.empresas.count_documents({}) == 1
                 assert await db.bienvenidas_email.count_documents({}) == 1
-                # A fresh OAuth login with a different email is linked by stable sub.
-                identity.return_value = {'sub': 'stable-google-sub', 'email': 'new-name@gmail.com'}
-                start2 = await client.post('/auth/google/start', json={'binding': BINDING})
-                login = await client.post('/auth/google/complete', json={**payload, 'state': state(start2.json()['authorization_url'])})
-                assert login.status_code == 200 and login.json()['empresa']['id_empresa'] == session['empresa']['id_empresa']
+                # Google is verification only; it cannot open an existing account.
+                start2 = await client.post('/auth/google/start', json={'binding': BINDING, 'company': DETAILS})
+                repeated = await client.post('/auth/google/complete', json={**payload, 'state': state(start2.json()['authorization_url'])})
+                assert repeated.status_code == 409 and 'access_token' not in repeated.json()
                 assert await db.empresas.count_documents({}) == 1
                 # Legacy credentials remain valid after the Mongo datetime update.
                 await db.empresas.update_one({'id_empresa': session['empresa']['id_empresa']}, {'$set': {

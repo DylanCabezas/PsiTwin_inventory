@@ -58,6 +58,7 @@ export type EstadoStock = 'SIN_STOCK' | 'STOCK_BAJO' | 'STOCK_OK' | 'SOBRE_STOCK
 /* ------------------------------------------------------------------ */
 
 export interface RegisterBody {
+  password_confirmation: string
   nombre: string
   nombre_ceo: string
   ruc: string
@@ -305,6 +306,8 @@ export interface ProductoUpdate {
 }
 
 export interface Inventario extends Auditoria {
+  /** Identificador de la existencia por producto y rack. */
+  id_detalle_inventario?: Id
   id_inventario: Id
   id_producto: Id
   id_rack: Id
@@ -317,6 +320,7 @@ export interface Inventario extends Auditoria {
 }
 
 export interface InventarioCreate {
+  id_almacen: Id
   id_producto: Id
   id_rack: Id
   stock_actual: number
@@ -382,6 +386,7 @@ export interface OperarioUpdate {
 
 /** El backend devuelve id_producto e id_rack del inventario al momento del movimiento. */
 export interface Movimiento {
+  id_detalle_inventario?: Id
   id_movimiento: Id
   id_inventario: Id
   /** Detalle de recepción que generó la entrada (solo ENTRADA/RECEPCION). */
@@ -403,6 +408,7 @@ export interface Movimiento {
 
 /** POST /movimientos (solo OPERARIO; el autor sale del token): solo SALIDA por VENTA o VENCIMIENTO. */
 export interface MovimientoCreate {
+  id_detalle_inventario: Id
   id_inventario: Id
   tipo_movimiento: 'SALIDA'
   motivo_movimiento: 'VENTA' | 'VENCIMIENTO'
@@ -531,6 +537,7 @@ export interface DetalleReposicionUpdate {
 
 /** Línea de una recepción (body de `POST /recepciones` → `detalles[]`). */
 export interface DetalleRecepcionCreate {
+  id_detalle_inventario?: Id
   id_detalle_reposicion: Id
   /** OBLIGATORIO: inventario del producto de la línea en un rack del almacén de la orden. */
   id_inventario: Id
@@ -550,6 +557,7 @@ export interface DetalleRecepcionCreate {
 
 /** Detalle de recepción tal como lo devuelve el backend (también en `RecepcionMercaderia.detalles[]`). */
 export interface DetalleRecepcion {
+  id_detalle_inventario?: Id | null
   id_detalle_recepcion: Id
   id_recepcion: Id
   id_detalle_reposicion: Id

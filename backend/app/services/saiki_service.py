@@ -192,7 +192,7 @@ class SaikiService:
                 warehouse = header['id_almacen']
             answer, evidence = await historical_answer(user, warehouse, data.id_producto, data.message or '')
             return self._simple_response(answer, source='mongodb', data={'demanda_historica': evidence})
-        if intent.kind == 'demand_analysis' or data.id_almacen:
+        if intent.kind == 'demand_analysis':
             if user is None: raise HTTPException(401, 'Se requiere una sesión autenticada')
             horizon = intent.horizon_days or data.horizonte_dias
             if horizon not in (1, 7, 30, 90):

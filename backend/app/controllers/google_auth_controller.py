@@ -1,5 +1,5 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from typing import Literal
 from app.dependencies.dependencies import require_empresa
 from app.dto.auth_dto import UsuarioActual
@@ -14,7 +14,7 @@ service = GoogleAuthService()
 class StartRequest(BaseModel):
     binding: str = Field(min_length=40, max_length=128)
     company: CompanyDetails | None = None
-    purpose: Literal['login', 'register'] = 'login'
+    purpose: Literal['login', 'register'] = 'register'
 
 class CompleteRequest(BaseModel):
     binding: str = Field(min_length=40, max_length=128)
@@ -25,6 +25,21 @@ class FinishRequest(StartRequest):
     registration_ticket: str = Field(min_length=20, max_length=256)
     company: CompanyDetails | None = None
     registration_password: str = Field(min_length=8, max_length=128, repr=False)
+    registration_password_confirmation: str = Field(min_length=8, max_length=128, repr=False)
+
+    @model_validator(mode='after')
+    def matching_passwords(self):
+        if self.registration_password != self.registration_password_confirmation:
+            raise ValueError('Las contraseñas no coinciden')
+        return self
+
+class RegistrationStatusRequest(BaseModel):
+    binding: str = Field(min_length=40, max_length=128)
+    registration_ticket: str = Field(min_length=20, max_length=256)
+
+@router.post('/registration/status')
+async def registration_status(data: RegistrationStatusRequest):
+    return await service.registration_status(data.registration_ticket, data.binding)
 
 class LinkRequest(StartRequest):
     password: str = Field(min_length=1, max_length=128)
@@ -42,7 +57,7 @@ async def password_setup(data: PasswordSetupRequest, user: UsuarioActual = Depen
 
 @router.post('/start')
 async def start(data: StartRequest):
-    if data.purpose == 'register' and data.company is None:
+    if data.purpose != 'register' or data.company is None:
         raise HTTPException(422, 'Completa los datos de la empresa antes de continuar con Google.')
     return await service.start(data.binding, data.company, purpose=data.purpose)
 

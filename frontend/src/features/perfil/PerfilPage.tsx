@@ -18,7 +18,6 @@ import { useEmpresa } from '@/auth/useEmpresa'
 import { Button, Card, ErrorState, Field, Icon, Input, LoadingBlock, Modal, PageHeader, useApiErrorHandler, useToast } from '@/components/ui'
 import { formatFecha } from '@/lib/format'
 import { correo, texto } from '@/lib/zod'
-import { startGoogle } from '@/features/auth/googleAuth'
 
 export default function PerfilPage() {
   const { empresa, isLoading, error, refetch } = useEmpresa()
@@ -33,9 +32,8 @@ export default function PerfilPage() {
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">
           <DatosEmpresaCard key={empresa.id_empresa} empresa={empresa} />
-          {empresa.password_local_habilitada === false ? <GooglePasswordSetupCard /> : <PasswordCard />}
+          <PasswordCard />
           <WelcomeEmailCard />
-          {empresa.password_local_habilitada !== false && <GoogleLinkCard />}
           <ZonaPeligro empresa={empresa} />
         </div>
       )}
@@ -127,28 +125,6 @@ function DatosEmpresaCard({ empresa }: { empresa: Empresa }) {
       </form>
     </Card>
   )
-}
-
-function GooglePasswordSetupCard() {
-  const [password, setPassword] = useState('')
-  const [confirmation, setConfirmation] = useState('')
-  const [busy, setBusy] = useState(false)
-  const handleError = useApiErrorHandler()
-  return <Card title="Configurar contraseña" description="Tu cuenta usa Google. Para habilitar también contraseña y las acciones que la requieren, confirma tu identidad con Google.">
-    <Field label="Nueva contraseña"><Input type="password" autoComplete="new-password" value={password} onChange={e => setPassword(e.target.value)} /></Field>
-    <Field label="Repetir contraseña"><Input type="password" autoComplete="new-password" value={confirmation} onChange={e => setConfirmation(e.target.value)} /></Field>
-    <Button className="mt-3" loading={busy} disabled={password.length < 6 || password !== confirmation} onClick={() => { setBusy(true); void startGoogle(undefined, undefined, password).catch(e => handleError(e, { title: 'No se pudo configurar la contraseña' })).finally(() => setBusy(false)) }}>Confirmar con Google</Button>
-  </Card>
-}
-
-function GoogleLinkCard() {
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
-  const handleError = useApiErrorHandler()
-  return <Card title="Vincular Google" description="Para una cuenta existente, confirma tu contraseña actual antes de autorizar Google.">
-    <Field label="Contraseña actual"><Input type="password" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} /></Field>
-    <Button className="mt-3" loading={busy} disabled={!password} onClick={() => { setBusy(true); void startGoogle(undefined, password).catch(e => handleError(e, { title: 'No se pudo vincular Google' })).finally(() => setBusy(false)) }}>Vincular Google</Button>
-  </Card>
 }
 
 function WelcomeEmailCard() {
