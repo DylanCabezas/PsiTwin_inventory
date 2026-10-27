@@ -110,11 +110,11 @@ class SaikiService:
             raise HTTPException(504, 'La consulta tardó demasiado. Puedes reintentar.') from exc
         except PyMongoError as exc:
             logger.warning("saiki_request_error request_id=%s type=mongodb_unavailable", request_id)
-            detail = 'No fue posible consultar los operarios.' if intent.kind == 'workforce' else 'No fue posible consultar los almacenes, zonas y racks.' if intent.kind == 'locations' else 'No se pudo verificar el inventario en MongoDB.'
+            detail = 'No fue posible consultar los sensores y sus lecturas.' if intent.kind == 'sensors' or data.id_dispositivo else 'No fue posible consultar los operarios.' if intent.kind == 'workforce' else 'No fue posible consultar los almacenes, zonas y racks.' if intent.kind == 'locations' else 'No se pudo verificar el inventario en MongoDB.'
             raise HTTPException(status_code=503, detail=detail) from exc
         except RuntimeError as exc:
             if isinstance(exc, SaikiDatabaseError) or "MongoDB" in str(exc) or "motor" in str(exc):
-                detail = 'No fue posible consultar los operarios.' if intent.kind == 'workforce' else 'No fue posible consultar los almacenes, zonas y racks.' if intent.kind == 'locations' else 'No se pudo verificar el inventario en MongoDB.'
+                detail = 'No fue posible consultar los sensores y sus lecturas.' if intent.kind == 'sensors' or data.id_dispositivo else 'No fue posible consultar los operarios.' if intent.kind == 'workforce' else 'No fue posible consultar los almacenes, zonas y racks.' if intent.kind == 'locations' else 'No se pudo verificar el inventario en MongoDB.'
                 raise HTTPException(status_code=503, detail=detail) from exc
             raise
         finally:
@@ -167,7 +167,7 @@ class SaikiService:
             except OllamaUnavailableError as exc:
                 raise HTTPException(503, 'Ollama no está disponible en este momento. Puedes reintentar.') from exc
         if intent.kind == "sensors" or data.id_dispositivo:
-            if __import__('re').search(r'rack|ayer|semana|mes|madrugada|desconectad|alertas? activas', self.intent_router._normalize(data.message or '')):
+            if __import__('re').search(r'rack|ayer|semana|mes|madrugada|desconectad|alertas? activas|temperatura|humedad|corriente|ultimos? \d+ dias', self.intent_router._normalize(data.message or '')):
                 from app.services.saiki_sensor_queries import consultar_sensores
                 async with asyncio.timeout(self.settings.saiki_database_timeout_seconds):
                     answer, evidence = await consultar_sensores(user, data.message or '', data.id_dispositivo, data.id_almacen)

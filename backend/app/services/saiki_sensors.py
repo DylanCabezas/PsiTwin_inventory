@@ -2,6 +2,7 @@
 from collections import Counter
 from datetime import datetime, timedelta, timezone
 from math import isfinite
+from app.config.settings import settings
 
 from app.services.dispositivo_service import DispositivoService
 from app.repositories.alerta_repository import AlertaRepository
@@ -27,13 +28,25 @@ async def sensor_report(user, id_dispositivo=None, horas=24):
     connected = False
     for device in devices:
         state = device.get("estado") or {}
-        connected |= bool(state.get("conectado") and state.get("ultima_lectura"))
+        latest = state.get('ultima_lectura') or {}
+        timestamp = latest.get('ts')
+        if isinstance(timestamp, str):
+            try:
+                timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+            except ValueError:
+                timestamp = None
+        if isinstance(timestamp, datetime) and timestamp.tzinfo is None:
+            timestamp = timestamp.replace(tzinfo=timezone.utc)
+        fresh = isinstance(timestamp, datetime) and 0 <= (datetime.now(timezone.utc) - timestamp).total_seconds() <= settings.sensor_max_reading_age_seconds
+        connected |= bool(state.get('conectado') and latest and fresh)
         warehouse = await AlmacenRepository.obtener_por_id(device["id_almacen"])
         zone = await ZonaRepository.obtener_por_id(device["id_zona"])
         rack = await RackRepository.obtener_por_id(device["id_rack"]) if device.get("id_rack") else None
         location = " / ".join(str(x) for x in [(warehouse or {}).get("nombre"), (zone or {}).get("nombre"), (rack or {}).get("codigo")] if x)
         lines.append(f"{device['nombre']} — {location or 'Ubicación sin nombre registrado'}: "
                      + (f"última lectura {state['ultima_lectura']}" if state.get("conectado") and state.get("ultima_lectura") else "Sin datos disponibles"))
+        if latest and not fresh:
+            lines.append('Lectura desactualizada o sin fecha válida; no confirma el estado actual de la medición.')
         if id_dispositivo:
             until = datetime.now(timezone.utc)
             since = until - timedelta(hours=horas)

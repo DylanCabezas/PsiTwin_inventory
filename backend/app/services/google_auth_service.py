@@ -168,6 +168,8 @@ class GoogleAuthService:
         return self.session(linked) if linked else await self.register(flow['identity'], company, password_hash=password_hash)
 
     async def register(self, identity, details, password_hash=None):
+        if identity['email'].rsplit('@', 1)[-1].lower() != 'gmail.com':
+            raise HTTPException(422, 'Registra tu empresa con una cuenta Gmail (@gmail.com).')
         await self.indexes()
         db = self.database()
         payload = details.validated(identity['email'])

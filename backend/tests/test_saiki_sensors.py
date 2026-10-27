@@ -10,6 +10,13 @@ from pydantic import ValidationError
 
 
 class SensorReportTests(unittest.IsolatedAsyncioTestCase):
+    async def test_connected_device_without_reading_timestamp_is_not_current(self):
+        device = {'id_dispositivo': 'visible', 'nombre': 'Cámara 1', 'id_almacen': 'a', 'id_zona': 'z',
+                  'estado': {'conectado': True, 'ultima_lectura': {'t_int': 4}}}
+        answer, _ = await self.report([device], [])
+        self.assertIn('No hay lecturas actuales', answer)
+        self.assertIn('Lectura desactualizada o sin fecha válida', answer)
+
     async def report(self, devices, incidents):
         with patch('app.services.saiki_sensors.DispositivoService.listar', new=AsyncMock(return_value=devices)) as listing, \
              patch('app.services.saiki_sensors.AlertaRepository.listar_por_empresa', new=AsyncMock(return_value=incidents)) as history, \

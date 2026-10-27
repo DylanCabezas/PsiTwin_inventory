@@ -97,7 +97,7 @@ export default function RegistroPage() {
           </Field>
         </div>
         <Button type="submit" size="lg" fullWidth loading={googleBusy}>Continuar con Google</Button>
-        <p className="text-sm text-fg-muted">Google verifica tu correo. Después podrás iniciar sesión con Google o con ese correo y la contraseña que acabas de crear.</p>
+        <p className="text-sm text-fg-muted">Usa una cuenta Gmail (@gmail.com). Google verifica tu correo; después ingresarás con ese Gmail y la contraseña de PsiTwin que acabas de crear.</p>
       </form>
     </AuthLayout>
   )

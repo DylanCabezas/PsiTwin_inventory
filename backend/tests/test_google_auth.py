@@ -54,11 +54,30 @@ def app():
 def state(url): return parse_qs(urlsplit(url).query)['state'][0]
 
 
+def test_login_requires_exact_gmail_domain():
+    from app.dto.auth_dto import LoginRequest
+    from pydantic import ValidationError
+    for email in ('ceo@gmail.com', 'CEO@GMAIL.COM'):
+        assert LoginRequest(correo=email, password='registered-password')
+    for email in ('ceo@example.com', 'ceo@gmail.com.attacker.test', 'ceo@notgmail.com'):
+        with pytest.raises(ValidationError):
+            LoginRequest(correo=email, password='registered-password')
+
+
+def test_google_registration_rejects_non_gmail_before_creating_company():
+    service = GoogleAuthService(lambda: pytest.fail('Must reject before database access'))
+    async def run():
+        with pytest.raises(HTTPException) as error:
+            await service.register({'sub': 'workspace', 'email': 'ceo@example.com'}, CompanyDetails(**DETAILS))
+        assert error.value.status_code == 422
+    asyncio.run(run())
+
+
 @pytest.mark.parametrize('google_first', [False, True])
 def test_google_registration_enables_chosen_password_after_verified_identity(monkeypatch, google_first):
     async def run():
         async with isolated_database(monkeypatch) as db:
-            monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'password-google-sub', 'email': 'carlos@example.com'}))
+            monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'password-google-sub', 'email': 'carlos@gmail.com'}))
             password = 'chosen-registration-password'
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
                 initial = {'binding': BINDING} if google_first else {'binding': BINDING, 'company': DETAILS, 'registration_password': password}
@@ -77,9 +96,9 @@ def test_google_registration_enables_chosen_password_after_verified_identity(mon
                 company = await db.empresas.find_one({'google_sub': 'password-google-sub'})
                 assert company['correo_verificado'] and company['password'] != password
                 assert controller.verify_password(password, company['password'])
-                login = await client.post('/auth/login', json={'correo': 'carlos@example.com', 'password': password})
+                login = await client.post('/auth/login', json={'correo': 'carlos@gmail.com', 'password': password})
                 assert login.status_code == 200
-                assert (await client.post('/auth/login', json={'correo': 'carlos@example.com', 'password': 'incorrect-password'})).status_code == 401
+                assert (await client.post('/auth/login', json={'correo': 'carlos@gmail.com', 'password': 'incorrect-password'})).status_code == 401
                 # Registering again must never replace the existing account's password.
                 again = await client.post('/auth/google/start', json={**initial, 'company': DETAILS, 'registration_password': 'different-password'})
                 confirmed = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(again.json()['authorization_url']), 'code': 'controlled-code'})
@@ -101,7 +120,7 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
     async def run():
         async with isolated_database(monkeypatch) as db:
             service = controller.service
-            identity = AsyncMock(return_value={'sub': 'stable-google-sub', 'email': 'carlos@example.com'})
+            identity = AsyncMock(return_value={'sub': 'stable-google-sub', 'email': 'carlos@gmail.com'})
             monkeypatch.setattr(service, 'identity', identity)
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
                 start = await client.post('/auth/google/start', json={'binding': BINDING, 'company': DETAILS})
@@ -124,7 +143,7 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
                 assert await db.empresas.count_documents({}) == 1
                 assert await db.bienvenidas_email.count_documents({}) == 1
                 # A fresh OAuth login with a different email is linked by stable sub.
-                identity.return_value = {'sub': 'stable-google-sub', 'email': 'new-name@example.com'}
+                identity.return_value = {'sub': 'stable-google-sub', 'email': 'new-name@gmail.com'}
                 start2 = await client.post('/auth/google/start', json={'binding': BINDING})
                 login = await client.post('/auth/google/complete', json={**payload, 'state': state(start2.json()['authorization_url'])})
                 assert login.status_code == 200 and login.json()['empresa']['id_empresa'] == session['empresa']['id_empresa']
@@ -132,7 +151,7 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
                 # Legacy credentials remain valid after the Mongo datetime update.
                 await db.empresas.update_one({'id_empresa': session['empresa']['id_empresa']}, {'$set': {
                     'password': hash_password('legacy-test-password'), 'fecha_verificacion_correo': datetime.now(timezone.utc)}})
-                legacy = await client.post('/auth/login', json={'correo': 'carlos@example.com', 'password': 'legacy-test-password'})
+                legacy = await client.post('/auth/login', json={'correo': 'carlos@gmail.com', 'password': 'legacy-test-password'})
                 assert legacy.status_code == 200
                 assert (await client.get('/auth/me', headers={'Authorization': 'Bearer ' + legacy.json()['access_token']})).status_code == 200
                 # Sensitive setup requires Google proof from the already linked subject.
@@ -140,7 +159,7 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
                 assert setup.status_code == 200
                 confirmed = await client.post('/auth/google/complete', json={**payload, 'state': state(setup.json()['authorization_url'])})
                 assert confirmed.status_code == 200 and confirmed.json()['empresa']['password_local_habilitada'] is True
-                enabled = await client.post('/auth/login', json={'correo': 'carlos@example.com', 'password': 'configured-local-password'})
+                enabled = await client.post('/auth/login', json={'correo': 'carlos@gmail.com', 'password': 'configured-local-password'})
                 assert enabled.status_code == 200
     asyncio.run(run())
 
@@ -148,12 +167,12 @@ def test_google_unlinked_registration_and_secure_link_no_email_takeover(monkeypa
     async def run():
         async with isolated_database(monkeypatch) as db:
             service = controller.service
-            monkeypatch.setattr(service, 'identity', AsyncMock(return_value={'sub': 'new-sub', 'email': 'new@example.com'}))
+            monkeypatch.setattr(service, 'identity', AsyncMock(return_value={'sub': 'new-sub', 'email': 'new@gmail.com'}))
             start = await service.start(BINDING)
             required = await service.complete(state(start['authorization_url']), 'code', BINDING)
             assert required['registration_required']
             result = await service.finish_registration(required['registration_ticket'], BINDING, CompanyDetails(**DETAILS))
-            assert result['empresa']['correo'] == 'new@example.com'
+            assert result['empresa']['correo'] == 'new@gmail.com'
             with pytest.raises(HTTPException):
                 await service.finish_registration(required['registration_ticket'], BINDING, CompanyDetails(**DETAILS))
             await db.empresas.update_one({'id_empresa': result['empresa']['id_empresa']}, {'$unset': {'google_sub': ''}, '$set': {'password': hash_password('old-account-pass')}})
@@ -175,7 +194,7 @@ def test_expired_and_concurrent_callbacks_never_create_duplicates(monkeypatch):
     async def run():
         async with isolated_database(monkeypatch) as db:
             service = controller.service
-            monkeypatch.setattr(service, 'identity', AsyncMock(return_value={'sub': 'race-sub', 'email': 'race@example.com'}))
+            monkeypatch.setattr(service, 'identity', AsyncMock(return_value={'sub': 'race-sub', 'email': 'race@gmail.com'}))
             start = await service.start(BINDING, CompanyDetails(**DETAILS))
             current = state(start['authorization_url'])
             await db.google_oauth_flows.update_one({'_id': digest(current)}, {'$set': {'expires_at': datetime.now(timezone.utc) - timedelta(minutes=1)}})
@@ -195,7 +214,7 @@ def test_real_signature_and_oidc_claim_validation(monkeypatch, invalid):
     other = rsa.generate_private_key(public_exponent=65537, key_size=2048)
     public = json.loads(jwt.algorithms.RSAAlgorithm.to_jwk(private.public_key())); public['kid'] = 'test-key'
     now = datetime.now(timezone.utc)
-    claims = {'iss': 'https://accounts.google.com', 'aud': 'client', 'sub': 'subject', 'email': 'carlos@example.com',
+    claims = {'iss': 'https://accounts.google.com', 'aud': 'client', 'sub': 'subject', 'email': 'carlos@gmail.com',
         'email_verified': True, 'iat': now, 'exp': now + timedelta(minutes=5), 'nonce': 'nonce'}
     if invalid == 'audience': claims['aud'] = 'attacker'
     if invalid == 'issuer': claims['iss'] = 'https://attacker.example'
@@ -214,4 +233,4 @@ def test_real_signature_and_oidc_claim_validation(monkeypatch, invalid):
         with pytest.raises(HTTPException) as error: asyncio.run(call)
         assert error.value.status_code == 401
     else:
-        assert asyncio.run(call) == {'sub': 'subject', 'email': 'carlos@example.com'}
+        assert asyncio.run(call) == {'sub': 'subject', 'email': 'carlos@gmail.com'}

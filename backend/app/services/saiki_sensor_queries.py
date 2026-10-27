@@ -19,12 +19,15 @@ def normalize(text):
 
 
 def period(text, now=None):
+    text = normalize(text)
     local = (now or datetime.now(timezone.utc)).astimezone(ZoneInfo('America/Lima'))
     midnight = local.replace(hour=0, minute=0, second=0, microsecond=0)
     if 'ayer' in text:
         start, end = midnight - timedelta(days=1), midnight
     elif 'este mes' in text:
         start, end = midnight.replace(day=1), local
+    elif re.search(r'ultim[oa]s? 7 dias|ultima semana', text):
+        start, end = local - timedelta(days=7), local
     elif 'semana' in text:
         start, end = midnight - timedelta(days=local.weekday()), local
     elif '30 dias' in text:
@@ -82,10 +85,14 @@ async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=Non
             rack = racks.get(a.get('id_rack'), {}).get('codigo', a.get('id_rack') or 'sin rack')
             lines.append(f"Rack {rack}: {a.get('mensaje') or a.get('titulo')} Estado: {a.get('estado')}; fecha {a.get('fecha_creacion')}.")
         evidence.update(total_alertas=count, alertas=rows)
+    requested_field = field
     for d in devices[:50]:
         state = d.get('estado') or {}
         latest = state.get('ultima_lectura') or {}
         available = set(d.get('parametros_disponibles', [])) | {p for p in LABELS if latest.get(p) is not None}
+        field = requested_field
+        if field == 't_int' and 'interna' not in text and 't_int' not in available and 't_amb' in available:
+            field = 't_amb'
         if field and field not in available and not temporal:
             continue
         rack = racks.get(d.get('id_rack'), {}).get('codigo') or 'sin rack'
@@ -93,6 +100,8 @@ async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=Non
         stats = {}
         if temporal:
             stats = await LecturaRepository.resumen(user.id_empresa, d['id_dispositivo'], since, until)
+            if field == 't_int' and 'interna' not in text and 't_int' not in stats and 't_amb' in stats:
+                field = 't_amb'
             trend = None
             if field and re.search('cambio|evol|tendencia', text):
                 midpoint = since + (until - since) / 2
@@ -113,7 +122,10 @@ async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=Non
             value = latest.get(field)
             timestamp = latest.get('ts')
             if isinstance(timestamp, str):
-                timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                try:
+                    timestamp = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                except ValueError:
+                    timestamp = None
             if timestamp and timestamp.tzinfo is None:
                 timestamp = timestamp.replace(tzinfo=timezone.utc)
             fresh = timestamp and 0 <= (datetime.now(timezone.utc) - timestamp).total_seconds() <= settings.sensor_max_reading_age_seconds
