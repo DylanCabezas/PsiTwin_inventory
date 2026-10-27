@@ -38,6 +38,13 @@ const TONO_CONTADOR: Record<PestanaId, string> = {
   'sobre-stock': 'bg-info-soft text-info',
 }
 
+const TONO_BOTON: Record<PestanaId, string> = {
+  todos: 'border-slate-400/20 bg-slate-400/10 text-slate-200 hover:bg-slate-400/20',
+  'stock-bajo': 'border-amber-300/25 bg-amber-300/10 text-amber-200 hover:bg-amber-300/20',
+  'sin-stock': 'border-rose-300/25 bg-rose-300/10 text-rose-200 hover:bg-rose-300/20',
+  'sobre-stock': 'border-sky-300/25 bg-sky-300/10 text-sky-200 hover:bg-sky-300/20',
+}
+
 const normalizar = (s: string) => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim()
 
 export default function InventarioPage() {
@@ -121,8 +128,9 @@ export default function InventarioPage() {
                 aria-pressed={activa}
                 onClick={() => cambiarPestana(p.id)}
                 className={cn(
-                  'inline-flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-ui)] border px-3.5 text-sm font-medium transition-colors',
-                  activa ? 'border-accent bg-accent-soft text-fg' : 'border-border bg-surface text-fg-muted hover:bg-surface-2 hover:text-fg',
+                  'inline-flex h-10 shrink-0 items-center gap-2 rounded-[var(--radius-ui)] border px-3.5 text-sm font-medium transition-all duration-200',
+                  TONO_BOTON[p.id],
+                  activa && 'ring-1 ring-current ring-inset shadow-sm',
                 )}
               >
                 {p.label}

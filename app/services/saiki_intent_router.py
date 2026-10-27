@@ -25,9 +25,28 @@ class SaikiIntentRouter:
     @classmethod
     def classify(cls, message: str, history: list[dict] | None = None) -> SaikiIntent:
         text = cls._normalize(message)
-        if re.search(r'sensor|temperatura|humedad|refrigera|equipo de frio|corriente|incidente|calibr|mantenimiento|puerta', text):
+        plain = re.sub(r'[^a-z0-9\s]', '', text).strip()
+        if re.search(r'quien eres|quien es saiki|que puedes hacer|como me ayudas|como puedes ayudar|que haces|presentate', text):
+            return SaikiIntent('identity', frozenset())
+        if re.fullmatch(r'(muchas )?gracias( saiki)?|adios( saiki)?|hasta luego|nos vemos', plain):
+            return SaikiIntent('courtesy', frozenset())
+        if re.search(r'como (?:puedo |se |hago para |podria )?(?:crear|registrar|agregar|anadir|editar|eliminar|ver|consultar|administrar|gestionar|usar|utilizar|configurar|vincular)|pasos para|donde (?:creo|registro|agrego)|como funciona|ayuda (?:con|para)|funciones de psitwin|limitaciones de psitwin', text):
+            return SaikiIntent('platform_help', frozenset())
+        if re.search(r'operario|empleado|personal', text):
+            return SaikiIntent('workforce', frozenset({'get_workforce'}))
+        if re.search(r'disponibilidad|analiza (?:este registro|la informacion disponible)', text):
+            return SaikiIntent('operational_analysis', cls.CURRENT_TOOLS)
+        if re.search(r'\b(?:cuantos?|numero|lista|muestra|tengo|hay)\b.*\b(?:almacen|almacenes|zonas?|racks?)\b|\b(?:almacenes|zonas|racks)\b.*\b(?:tengo|hay)\b', text) and not re.search('sensor|temperatura|humedad|alerta', text):
+            return SaikiIntent('locations', frozenset({'get_locations'}))
+        if re.search(r'sensor|temperatura|humedad|refrigera|equipo de frio|corriente|incidente|calibr|mantenimiento|puerta|alertas?.*(?:mes|semana)|madrugada', text):
             return SaikiIntent('sensors', frozenset())
-        if re.fullmatch(r'\s*(hola|buenos dias|buenas tardes|buenas noches|hey)(\s+saiki)?[!,.?\s]*', text):
+        if (re.search(r'demanda|tendencia', text)
+                and not re.search(r'futur|proyect|pronostic|predic|autogluon|manana|proxim|esperad|reabastec|recomend|accion|stock|existencia', text)
+                and (cls._horizon_days(text) is None or re.search(r'histor|pasad|ultim|observad', text))):
+            return SaikiIntent('historical_demand', frozenset({'get_historical_demand'}))
+        if re.search(r'autogluon|weightedensemble|wape|confiab|fiable|mayor demanda|mas demanda|demanda proyectada|reabastec|espera vender|(?:accion|recomend).*demanda|demanda.*(?:stock|existencia)', text):
+            return SaikiIntent('demand_analysis', frozenset({'get_demand_analysis'}), cls._horizon_days(text) or 30)
+        if re.fullmatch(r'\s*(hola|buenos dias|buenas tardes|buenas noches|hey)(\s+saiki)?[!,.?\s]*', plain):
             return SaikiIntent('greeting', frozenset())
         horizon = cls._horizon_days(text)
         analysis = bool(re.search(r'analiz|evalua|prioriz|justific|por que|motivo|explica', text))
@@ -71,6 +90,8 @@ class SaikiIntentRouter:
             return SaikiIntent('products', frozenset({'get_product', 'get_warehouse_status'}))
         if re.search(r'inventario|almacen', text) and re.search(r'como|estado|resumen|situacion|panorama', text):
             return SaikiIntent('general', frozenset({'get_warehouse_status'}))
+        if re.search(r'\b(?:explica|explicame|conversemos|opinas|significa|que es|que son|por que)\b', text):
+            return SaikiIntent('conversation', frozenset())
         return SaikiIntent('ambiguous', frozenset())
 
     @classmethod

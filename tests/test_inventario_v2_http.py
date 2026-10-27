@@ -51,7 +51,7 @@ def test_forecast_http_horizons_and_dates(app,db,horizon):
         assert result.status_code==200,result.text
         payload=result.json()
         assert payload["horizonte_dias"]==horizon
-        expected="HISTORIAL_INSUFICIENTE" if horizon<=7 else "MODELO_NO_DISPONIBLE"
+        expected="HISTORIAL_INSUFICIENTE"  # Every horizon requires observed movement history.
         assert payload["estado"]==expected
         assert payload["demanda_total_estimada"] is None and payload["predicciones_diarias"]==[]
     run(scenario())

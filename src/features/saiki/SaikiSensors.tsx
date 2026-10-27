@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useSaikiSessionOptional } from './SaikiSession'
 import { useLocation } from 'react-router'
 import { useAlertasSensores, useDispositivos } from '@/api/dispositivos'
 import { useMonitoreoVivo } from '@/api/monitoreo'
@@ -53,6 +54,11 @@ export function SaikiSensors() {
 }
 
 export function SaikiNotification() {
+  const session = useSaikiSessionOptional()
+  const voice = session?.voice
+  const pending = session?.pending
+  const spoken = useRef(new Set<string>())
+  const initialized = useRef(false)
   const vivo = useMonitoreoVivo()
   const { rol, empresa } = useSession()
   const location = useLocation()
@@ -67,6 +73,24 @@ export function SaikiNotification() {
   const alert = vivo?.conexion === 'conectado' ? [...vivo.alertasAbiertas]
     .filter(a => ['CRITICO', 'ALTO'].includes(a.nivel_riesgo ?? '') && (hidden[a.id_alerta] ?? 0) <= now)
     .sort((a, b) => Number(b.nivel_riesgo === 'CRITICO') - Number(a.nivel_riesgo === 'CRITICO'))[0] : undefined
+  useEffect(() => {
+    if (vivo?.conexion !== 'conectado') return
+    const alerts = vivo.alertasAbiertas
+    if (!initialized.current) {
+      alerts.forEach(a => spoken.current.add(a.id_alerta))
+      initialized.current = true
+      return // Never replay existing incidents after loading a session.
+    }
+    const announcements: string[] = []
+    for (const a of alerts) {
+      if (spoken.current.has(a.id_alerta)) continue
+      if (pending && voice?.voiceEnabled && voice.preferences.sensorAlerts && voice.isEnabled()) continue
+      spoken.current.add(a.id_alerta)
+      if (!pending && voice?.voiceEnabled && voice.preferences.sensorAlerts && voice.isEnabled())
+        announcements.push(`${a.mensaje || a.titulo}. Estado: ${a.estado}.`)
+    }
+    if (announcements.length) voice?.speak(`Alerta de sensores. ${announcements.slice(0, 3).join(' ')} ${announcements.length > 3 ? `Hay ${announcements.length - 3} incidentes adicionales.` : ''} Puedes consultar el historial en Monitoreo.`)
+  }, [vivo?.alertasAbiertas, vivo?.conexion, pending, voice])
   const dismiss = (until: number) => {
     if (!alert) return
     const next = { ...hidden, [alert.id_alerta]: until }
@@ -88,7 +112,7 @@ export function SaikiNotification() {
   return <aside role="status" aria-label="Aviso de Saiki" className="fixed top-1/2 left-1/2 z-50 w-[min(92vw,32rem)] -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-violet-400 bg-surface p-6 shadow-2xl shadow-violet-500/30">
     <AgentAudioVisualizerWave size="sm" state="idle" color="#6587ff" colorShift={1.5} className="mx-auto" />
     <p className="font-semibold">{saludo}. Soy Saiki.</p>
-    <p className="mt-2 font-semibold text-danger">{alert.nivel_riesgo} · {vivo?.dispositivos.get(alert.id_dispositivo ?? '')?.nombre ?? 'Equipo de refrigeración'}</p>
+    <p className="mt-2 font-semibold text-danger">{alert.nivel_riesgo} · {vivo?.dispositivos.get(alert.id_dispositivo ?? '')?.nombre ?? 'Dispositivo'}{alert.codigo_rack || alert.id_rack ? ` · Rack ${alert.codigo_rack || alert.id_rack}` : ''}</p>
     <p className="my-3">{alert.mensaje || alert.titulo}</p>
     <p className="mb-3 text-sm text-fg-muted">Te recomiendo revisar las lecturas y el equipo asociado. La alerta por sí sola no confirma una avería.</p>
     <div className="flex flex-wrap gap-2">

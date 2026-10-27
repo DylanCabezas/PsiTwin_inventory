@@ -310,8 +310,24 @@ class EmailVerificationServiceTests(unittest.TestCase):
         code = self.sent[0][0][2].splitlines()[4]
         success = asyncio.run(service.verify_code("empresa", "empresa-1", "dueno@empresa.test", code))
         self.assertTrue(success["verified"])
+        self.assertEqual(len(self.sent), 2)
+        self.assertIn('validado correctamente', self.sent[1][0][1])
         second = asyncio.run(service.verify_code("empresa", "empresa-1", "dueno@empresa.test", code))
         self.assertFalse(second["verified"])
+        self.assertEqual(len(self.sent), 2)
+
+    def test_confirmation_failure_does_not_undo_verification(self):
+        def sender(*args):
+            if len(self.sent):
+                raise RuntimeError('SMTP unavailable')
+            self.sent.append((args, {}))
+
+        service = EmailVerificationService(lambda: self.database, sender)
+        asyncio.run(service.request_verification('empresa', 'empresa-1', 'dueno@empresa.test'))
+        code = self.sent[0][0][2].splitlines()[4]
+        result = asyncio.run(service.verify_code('empresa', 'empresa-1', 'dueno@empresa.test', code))
+        self.assertTrue(result['verified'])
+        self.assertTrue(result['entity']['correo_verificado'])
 
     def test_naive_mongo_timestamps_keep_cooldown_working(self):
         service = EmailVerificationService(

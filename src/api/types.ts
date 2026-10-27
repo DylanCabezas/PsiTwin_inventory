@@ -59,6 +59,7 @@ export type EstadoStock = 'SIN_STOCK' | 'STOCK_BAJO' | 'STOCK_OK' | 'SOBRE_STOCK
 
 export interface RegisterBody {
   nombre: string
+  nombre_ceo: string
   ruc: string
   sector: string
   correo: string
@@ -113,8 +114,11 @@ export interface Auditoria {
 }
 
 export interface Empresa extends Auditoria {
+  password_local_habilitada?: boolean
   id_empresa: Id
+  correo_verificado?: boolean
   nombre: string
+  nombre_ceo?: string | null
   ruc: string
   sector: string
   correo: string
@@ -124,6 +128,7 @@ export interface Empresa extends Auditoria {
 /** PUT /empresas/me (todos opcionales en el backend; el RUC también es editable). */
 export interface EmpresaUpdate {
   nombre: string
+  nombre_ceo?: string | null | undefined
   ruc?: string
   sector: string
   correo: string

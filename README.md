@@ -1,6 +1,40 @@
 # PsiTwin_inventory
 
+Actualización de autenticación, sensores y voz local: [guía de ejecución, configuración y límites comprobados](docs/ACTUALIZACION_SISTEMA_VOZ_LOCAL.md).
+
 ## Ejecutar
+
+Inicio automatizado en Windows: doble clic en `iniciar.cmd`, o ejecuta
+`.\iniciar.cmd` desde PowerShell. Inicia backend y frontend en segundo plano,
+compila el frontend para servirlo con Vite preview, reutiliza servidores que ya responden e inicia los contenedores existentes
+`psitwin-mongo` y `psitwin-mosquitto` cuando Docker esta disponible.
+Requiere `.venv` o el Python portable `.runtime.local/python` con `requirements.txt`, dependencias npm instaladas y MongoDB
+configurado en `.env`. Guarda logs en `artifacts/run.local/`.
+Para detener los procesos creados por el lanzador: `.\iniciar.cmd -Detener`.
+Para iniciar sin abrir navegador: `.\iniciar.cmd -SinNavegador`.
+Deja la terminal abierta mientras usas la aplicacion. Para trabajar con recarga
+automatica del frontend, utiliza el comando `npm.cmd run dev` indicado abajo.
+
+En Windows (PowerShell), abre dos terminales desde la carpeta del proyecto:
+
+```powershell
+# Terminal 1: backend; MongoDB debe estar disponible en la URL de .env
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload
+
+# Terminal 2: frontend; npm.cmd funciona con scripts de PowerShell deshabilitados
+npm.cmd run dev -- --host 127.0.0.1
+```
+
+Frontend: http://127.0.0.1:5173. Estado del backend: http://127.0.0.1:8000/health.
+Si MongoDB ya corre como servicio local, no es necesario iniciar su contenedor.
+
+Comprobaciones en Windows:
+
+```powershell
+npm.cmd run build
+npm.cmd run test:ui
+.\.venv\Scripts\python.exe -m pytest -q
+```
 
 ```bash
 docker start psitwin-mongo            # MongoDB en localhost:27017

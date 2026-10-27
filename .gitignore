@@ -24,6 +24,8 @@ venv/
 
 # Pytest
 .pytest_cache/
+.venv-forecasting/
+importar_demanda.log
 
 # Sistema operativo
 .DS_Store

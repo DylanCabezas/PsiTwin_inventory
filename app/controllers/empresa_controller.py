@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import (
     APIRouter,
     Depends,
@@ -43,6 +45,10 @@ from app.services import (
     auth_service
 )
 from app.services.email_verification_service import EmailVerificationService
+from fastapi import BackgroundTasks, HTTPException
+from app.services.welcome_email_service import WelcomeEmailService
+
+welcome_email_service = WelcomeEmailService()
 
 
 router = APIRouter(
@@ -77,15 +83,41 @@ email_verification_service = EmailVerificationService()
     summary="Registrar empresa"
 )
 async def register(
-    data: EmpresaRegisterRequest
+    data: EmpresaRegisterRequest,
+    background_tasks: BackgroundTasks
 ):
-
-    return await (
+    company = await (
         empresa_service
         .register_empresa(
             data
         )
     )
+    background_tasks.add_task(welcome_email_service.deliver_safely, company['id_empresa'])
+    return company
+
+
+async def send_registration_verification(company_id: str):
+    try:
+        await email_verification_service.request_entity_verification('empresa', company_id)
+    except Exception:
+        logging.getLogger(__name__).error('registration_verification_failed empresa=%s', company_id)
+
+
+@router.get('/empresas/me/bienvenida')
+async def welcome_status(user: UsuarioActual = Depends(require_empresa)):
+    return await welcome_email_service.status(user.id_empresa)
+
+
+@router.post('/empresas/me/bienvenida/reintentar', status_code=202)
+async def retry_welcome(background_tasks: BackgroundTasks, user: UsuarioActual = Depends(require_empresa)):
+    company = await empresa_service.get_empresa_profile(user.id_empresa)
+    if not company.get('nombre_ceo'): raise HTTPException(422, 'Guarda el nombre del CEO en tu perfil primero')
+    await welcome_email_service.enqueue(company)
+    state = await welcome_email_service.status(user.id_empresa)
+    if state['status'] in ('ENVIANDO', 'REVISAR_ENVIO'):
+        raise HTTPException(409, 'El envío requiere comprobar su resultado antes de reintentarlo')
+    if state['status'] != 'ENVIADO': background_tasks.add_task(welcome_email_service.deliver_safely, user.id_empresa)
+    return state
 
 
 # ============================================================
@@ -296,6 +328,7 @@ async def delete_my_empresa(
 
 @router.post(
     "/empresas/{id_empresa}/correo/enviar-verificacion",
+    deprecated=True,
     response_model=EmailVerificationSendResponse,
     summary="Enviar verificación de correo de empresa",
 )
@@ -312,6 +345,7 @@ async def send_empresa_email_verification(
 
 @router.post(
     "/empresas/{id_empresa}/correo/verificar",
+    deprecated=True,
     response_model=EmailVerificationResponse,
     summary="Verificar correo de empresa",
 )

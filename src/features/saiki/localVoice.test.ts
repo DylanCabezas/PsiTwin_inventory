@@ -1,0 +1,53 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { LocalRecognition, localTts } from './localVoice'
+
+describe('local voice transport', () => {
+  afterEach(() => { vi.unstubAllGlobals(); vi.useRealTimers(); vi.clearAllMocks() })
+  it('offers the two requested Spanish voices', () => {
+    expect(localTts.voices().map(v => v.id)).toEqual(['em_santa', 'em_alex'])
+    expect(localTts.id).toBe('kokoro-local')
+  })
+  it('stops a microphone granted after cancellation without submitting audio', async () => {
+    let grant!: (stream: MediaStream) => void
+    const stop = vi.fn()
+    const fetcher = vi.fn()
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: () => new Promise<MediaStream>(resolve => { grant = resolve }) } })
+    vi.stubGlobal('fetch', fetcher)
+    const recognition = new LocalRecognition()
+    recognition.start(); recognition.abort()
+    grant({ getTracks: () => [{ stop }] } as unknown as MediaStream)
+    await Promise.resolve(); await Promise.resolve()
+    expect(stop).toHaveBeenCalledOnce()
+    expect(fetcher).not.toHaveBeenCalled()
+  })
+  it('records only after opt-in and sends audio to the authenticated local backend', async () => {
+    const stop = vi.fn()
+    let recorder!: FakeRecorder
+    class FakeRecorder {
+      static isTypeSupported = () => true
+      mimeType = 'audio/webm'; state = 'inactive'
+      ondataavailable?: (event: { data: Blob }) => void
+      onstop?: () => void
+      constructor() { recorder = this }
+      start() { this.state = 'recording' }
+      stop() { this.state = 'inactive'; this.ondataavailable?.({ data: new Blob(['test audio']) }); this.onstop?.() }
+    }
+    vi.stubGlobal('MediaRecorder', FakeRecorder)
+    const getUserMedia = vi.fn(async () => ({ getTracks: () => [{ stop }] }))
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia } })
+    const fetcher = vi.fn(async (_url: string, _options: RequestInit) => ({ ok: true, json: async () => ({ text: 'Consulta mi inventario' }) }))
+    vi.stubGlobal('fetch', fetcher)
+    const recognition = new LocalRecognition()
+    const result = vi.fn()
+    recognition.onresult = result
+    expect(getUserMedia).not.toHaveBeenCalled()
+    recognition.start()
+    await vi.waitFor(() => expect(recorder.state).toBe('recording'))
+    recognition.finish()
+    await vi.waitFor(() => expect(result).toHaveBeenCalledOnce())
+    expect(fetcher.mock.calls[0]?.[0]).toBe('/api/v1/saiki/voice/transcribe')
+    expect(stop).toHaveBeenCalled()
+    recognition.abort()
+  })
+})

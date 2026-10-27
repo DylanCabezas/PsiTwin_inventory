@@ -13,6 +13,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { NotFoundPage, RouteError } from '@/components/layout/RouteError'
 import LoginPage from '@/features/auth/LoginPage'
 import RegistroPage from '@/features/auth/RegistroPage'
+import GoogleCallbackPage from '@/features/auth/GoogleCallbackPage'
 import CambiarPasswordPage from '@/features/cuenta/CambiarPasswordPage'
 import InicioPorRol from '@/features/inicio/InicioPorRol'
 import OnboardingAlmacenPage from '@/features/onboarding/OnboardingAlmacenPage'
@@ -26,6 +27,7 @@ export const routes: RouteObject[] = [
   {
     errorElement: <RouteError />,
     children: [
+      { path: '/auth/google/callback', element: <GoogleCallbackPage /> },
       {
         element: <PublicOnly />,
         children: [
@@ -72,6 +74,7 @@ export const routes: RouteObject[] = [
                           { path: 'operarios', ...page(() => import('@/features/operarios/OperariosPage')) },
                           { path: 'proveedores', ...page(() => import('@/features/proveedores/ProveedoresPage')) },
                           { path: 'saiki', ...page(() => import('@/features/saiki/SaikiPage')) },
+                          { path: 'analisis', ...page(() => import('@/features/analisis/AnalisisPage')) },
                           { path: 'perfil', ...page(() => import('@/features/perfil/PerfilPage')) },
                         ],
                       },

@@ -54,6 +54,7 @@ export type TipoAlertaSensor =
   | 'PUERTA_ABIERTA'
   | 'APERTURAS_EXCESIVAS'
   | 'SENSOR_SIN_DATOS'
+  | 'LECTURA_DESACTUALIZADA'
 
 export const TIPOS_ALERTA_SENSOR: TipoAlertaSensor[] = [
   'TEMPERATURA_FUERA_RANGO',
@@ -62,10 +63,13 @@ export const TIPOS_ALERTA_SENSOR: TipoAlertaSensor[] = [
   'PUERTA_ABIERTA',
   'APERTURAS_EXCESIVAS',
   'SENSOR_SIN_DATOS',
+  'LECTURA_DESACTUALIZADA',
 ]
 
 /** Alerta (colección existente) con los campos de sensor. Una por episodio. */
 export interface Alerta {
+  codigo_rack?: string | null
+  id_rack?: string | null
   id_alerta: string
   tipo_alerta: TipoAlertaSensor | (string & {})
   estado: 'ACTIVA' | 'VISTA' | 'RESUELTA' | 'IGNORADA' | (string & {})
@@ -88,6 +92,7 @@ export interface Alerta {
 
 /** Estado en vivo de un dispositivo (REST y snapshot del WebSocket). */
 export interface EstadoDispositivo {
+  max_edad_lectura_s?: number
   conectado: boolean
   ultima_lectura: Lectura | null
   puerta_abierta_desde: string | null
@@ -95,6 +100,7 @@ export interface EstadoDispositivo {
 }
 
 export interface Dispositivo {
+  parametros_disponibles?: string[]
   id_dispositivo: string
   id_empresa?: string
   id_almacen: string
@@ -189,7 +195,7 @@ export function useLecturas(id: string | undefined, horas: number) {
 }
 
 /** Acepta lectura cruda `{ts, t_int…}` o agregada por minuto (`{minuto|ts, t_int: {min,max,prom}}` o `t_int_prom`). */
-function aLectura(raw: unknown): Lectura {
+export function aLectura(raw: unknown): Lectura {
   const r = (raw ?? {}) as Record<string, unknown>
   const valor = (campo: string): number | null => {
     const v = r[campo]

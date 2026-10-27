@@ -7,10 +7,11 @@ pydantic-settings
 email-validator
 bcrypt
 pwdlib[argon2]
-PyJWT
+PyJWT[crypto]
+httpx
 python-dotenv
-lightgbm
 pandas
 numpy
 aiomqtt
 websockets
+Pillow>=10.4

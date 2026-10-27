@@ -22,6 +22,10 @@ function aDatosSesion(raw: MeResponseRaw): DatosSesion {
 }
 
 export const authApi = {
+  fromGoogle: (raw: LoginResponseRaw): LoginResult => {
+    if (!raw.access_token) throw new ApiError(500, 'El servidor no devolvió la sesión.', {}, raw)
+    return { token: raw.access_token, ...aDatosSesion(raw) }
+  },
   register: async (body: RegisterBody): Promise<Empresa> =>
     norm.empresa.one(await api.post('/auth/register', body, { auth: false })),
 
@@ -42,7 +46,7 @@ export interface LoginResult extends DatosSesion {
 }
 
 /** Guarda token + rol + datos en la sesión y, para EMPRESA, precarga `/empresas/me`. */
-function useAplicarLogin() {
+export function useAplicarLogin() {
   const { iniciarSesion } = useSession()
   const qc = useQueryClient()
   return ({ token, ...datos }: LoginResult) => {

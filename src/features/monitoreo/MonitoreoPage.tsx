@@ -12,6 +12,7 @@ import { cn } from '@/lib/cn'
 import { formatFechaHora } from '@/lib/format'
 import { paths } from '@/paths'
 import { DispositivoFormModal, TokenModal } from './DispositivoForm'
+import { RackMonitor } from './RackMonitor'
 import { ESTADO_SENSOR, estadoDispositivo, etiquetaAlerta, ms, useAhora } from './monitoreoUtils'
 import { BadgeEstadoSensor, IndicadorConexion, useDispositivosVivos, ValoresVivos } from './ValoresVivos'
 
@@ -45,6 +46,7 @@ export default function MonitoreoPage() {
           : {})}
       />
 
+      <RackMonitor />
       {q.isLoading ? (
         <LoadingBlock label="Cargando dispositivos…" />
       ) : q.error ? (

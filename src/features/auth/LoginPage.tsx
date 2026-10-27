@@ -10,6 +10,7 @@ import { Button, Field, Icon, Input, useApiErrorHandler } from '@/components/ui'
 import { correo } from '@/lib/zod'
 import { paths } from '@/paths'
 import { AuthLayout } from './AuthLayout'
+import { startGoogle } from './googleAuth'
 
 const schema = z.object({
   correo: correo(),
@@ -93,6 +94,7 @@ export default function LoginPage() {
       )}
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+        <Button type="button" variant="secondary" fullWidth onClick={() => { void startGoogle().catch(e => handleError(e, { title: 'No se pudo conectar con Google' })) }}>Iniciar sesión con Google</Button>
         <Field label="Correo" error={formState.errors.correo?.message} required>
           <Input type="email" autoComplete="email" inputMode="email" size="lg" placeholder="usuario@empresa.com" {...register('correo')} />
         </Field>

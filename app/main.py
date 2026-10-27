@@ -124,6 +124,8 @@ from app.services.sensores.monitoreo_service import (
 from app.controllers.saiki_controller import (
     router as saiki_router
 )
+from app.controllers.analisis_controller import router as analisis_router
+from app.controllers.google_auth_controller import router as google_auth_router
 
 # NUEVO:
 # Controller temporal para probar el historial
@@ -162,6 +164,8 @@ async def lifespan(
     yield
 
     await monitoreo.detener()
+    from app.services.local_voice_service import voice_service
+    await voice_service.close()
 
     # --------------------------------------------------------
     # CIERRE DE LA APLICACION
@@ -193,6 +197,8 @@ app = FastAPI(
     lifespan=
         lifespan
 )
+
+app.include_router(google_auth_router, prefix=settings.api_prefix)
 
 
 # ============================================================
@@ -443,10 +449,10 @@ async def health():
 #      ↓
 # DEMAND HISTORY
 #      ↓
-# FEATURE BUILDER
+# CALENDARIO
 #      ↓
-# LIGHTGBM
-# D+1 ... D+7
+# AUTOGLUON
+# D+1 ... D+90
 #      ↓
 # FORECAST
 #      ↓
@@ -639,8 +645,8 @@ app.include_router(
 # ============================================================
 # FORECAST
 #
-# Movimiento -> DemandHistory -> FeatureBuilder
-# -> LightGBM -> D+1 ... D+7
+# Movimiento -> Historial completo -> Calendario
+# -> AutoGluon -> D+1 ... D+90
 #
 # Solo EMPRESA, sobre inventarios propios.
 # ============================================================
@@ -656,6 +662,11 @@ app.include_router(
     saiki_router,
     prefix=settings.api_prefix
 )
+
+from app.controllers.local_voice_controller import router as local_voice_router
+app.include_router(local_voice_router, prefix=settings.api_prefix)
+
+app.include_router(analisis_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)
 
 from app.controllers.detalle_inventario_controller import router as detalle_inventario_router
 app.include_router(detalle_inventario_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)

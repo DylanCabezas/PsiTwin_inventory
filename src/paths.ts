@@ -28,6 +28,7 @@ export const paths = {
   recepcion: (idRecepcion: string) => `/recepciones/${e(idRecepcion)}`,
 
   saiki: '/saiki',
+  analisis: '/analisis',
   monitoreo: '/monitoreo',
   dispositivo: (id: string) => `/monitoreo/${e(id)}`,
   perfil: '/perfil',
