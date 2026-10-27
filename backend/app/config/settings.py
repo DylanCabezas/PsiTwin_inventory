@@ -1,7 +1,8 @@
 # app/config/settings.py
 
 from functools import lru_cache
-from pydantic import Field
+from pydantic import Field, field_validator
+from app.config.paths import BACKEND_ROOT, REPOSITORY_ROOT, runtime_path
 
 from pydantic_settings import (
     BaseSettings,
@@ -10,6 +11,12 @@ from pydantic_settings import (
 
 
 class Settings(BaseSettings):
+
+    @field_validator('autogluon_artifact_dir', 'autogluon_python', 'autogluon_cache_dir',
+                     'saiki_voice_python', 'saiki_voice_site_packages', 'saiki_piper_model', mode='after')
+    @classmethod
+    def stable_runtime_paths(cls, value):
+        return str(runtime_path(value)) if value else value
 
     # ============================================================
     # APLICACION
@@ -146,7 +153,7 @@ class Settings(BaseSettings):
     # ============================================================
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=(REPOSITORY_ROOT / '.env', BACKEND_ROOT / '.env'),
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore"

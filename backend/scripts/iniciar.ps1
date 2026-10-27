@@ -1,4 +1,4 @@
-param([switch]$Detener, [switch]$SinNavegador, [switch]$Demo)
+﻿param([switch]$Detener, [switch]$SinNavegador, [switch]$Demo)
 
 $ErrorActionPreference = 'Stop'
 
@@ -7,7 +7,9 @@ if ($Demo) {
     exit $LASTEXITCODE
 }
 
-$projectRoot = Split-Path $PSScriptRoot -Parent
+$backendRoot = Split-Path $PSScriptRoot -Parent
+$projectRoot = Split-Path $backendRoot -Parent
+$frontendRoot = Join-Path $projectRoot 'frontend'
 Set-Location -LiteralPath $projectRoot
 $runDir = Join-Path $projectRoot 'artifacts\run.local'
 $stateFile = Join-Path $runDir 'procesos.json'
@@ -69,7 +71,7 @@ try {
     $frontendReady = Test-Endpoint 'http://127.0.0.1:5173'
     if (-not $backendReady) {
         $python = $null
-        foreach ($candidatePath in @('.venv\Scripts\python.exe', '.runtime.local\python\python.exe')) {
+        foreach ($candidatePath in @('backend\.venv\Scripts\python.exe', '.venv\Scripts\python.exe', '.runtime.local\python\python.exe')) {
             $candidate = Join-Path $projectRoot $candidatePath
             if (-not (Test-Path -LiteralPath $candidate)) { continue }
             try {
@@ -111,7 +113,7 @@ try {
             }
         }
         Write-Host 'Iniciando backend...'
-        $backend = Start-Process -FilePath $python -ArgumentList @('-m', 'app.run', '--host', '127.0.0.1', '--port', '8000') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'backend.out.log') -RedirectStandardError (Join-Path $runDir 'backend.err.log') -PassThru
+        $backend = Start-Process -FilePath $python -ArgumentList @('-m', 'app.run', '--host', '127.0.0.1', '--port', '8000') -WorkingDirectory $backendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'backend.out.log') -RedirectStandardError (Join-Path $runDir 'backend.err.log') -PassThru
         Save-Process $backend 'backend'
         Wait-Endpoint 'http://127.0.0.1:8000/health' $backend 'backend'
     }
@@ -128,12 +130,14 @@ try {
             throw 'El puerto 5173 esta ocupado pero no responde. Revisa el proceso existente antes de reiniciar.'
         }
         $node = (Get-Command node.exe -ErrorAction Stop).Source
-        if (-not (Test-Path 'node_modules\vite\bin\vite.js')) { throw 'Faltan dependencias del frontend. Ejecuta npm.cmd ci.' }
+        $vite = Join-Path $frontendRoot 'node_modules\vite\bin\vite.js'
+        if (-not (Test-Path -LiteralPath $vite)) { $vite = Join-Path $projectRoot 'node_modules\vite\bin\vite.js' }
+        if (-not (Test-Path -LiteralPath $vite)) { throw 'Faltan dependencias. Ejecuta npm.cmd --prefix frontend ci.' }
         Write-Host 'Compilando frontend...'
-        & npm.cmd run build
+        & npm.cmd --prefix $frontendRoot run build
         if ($LASTEXITCODE -ne 0) { throw 'La compilacion del frontend fallo. Revisa los errores anteriores.' }
         Write-Host 'Iniciando frontend...'
-        $frontend = Start-Process -FilePath $node -ArgumentList @('node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', '5173', '--strictPort') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'frontend.out.log') -RedirectStandardError (Join-Path $runDir 'frontend.err.log') -PassThru
+        $frontend = Start-Process -FilePath $node -ArgumentList @(('"' + $vite + '"'), 'preview', '--host', '127.0.0.1', '--port', '5173', '--strictPort') -WorkingDirectory $frontendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'frontend.out.log') -RedirectStandardError (Join-Path $runDir 'frontend.err.log') -PassThru
         Save-Process $frontend 'frontend'
         Wait-Endpoint 'http://127.0.0.1:5173' $frontend 'frontend'
     }

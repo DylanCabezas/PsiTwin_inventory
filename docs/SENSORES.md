@@ -1,6 +1,6 @@
 # Monitoreo con sensores — contrato backend ↔ frontend (2026-10-09)
 
-Backend: `~/Documentos/PsiTwin_inventory`. Una sola tienda por ahora: un proceso de backend, estado de alertas en
+Backend: `backend/` (este repo). Una sola tienda por ahora: un proceso de backend, estado de alertas en
 memoria (sin Redis; ver "Nube" al final). Si al implementar hay que desviarse, anotarlo en "Desviaciones".
 
 ## Sensores (un ESP32 por equipo de frío: cámara, vitrina, congelador)
@@ -72,7 +72,7 @@ Mensajes del servidor (JSON):
 - `{"tipo":"alerta","evento":"ABIERTA"|"RESUELTA","alerta":{…}}` — inmediato.
 
 ## Simulador
-`tools/simulador_sensores.py` publica por MQTT cada 0,5 s para N dispositivos registrados (lee sus tokens de argumentos
+`backend/tools/simulador_sensores.py` publica por MQTT cada 0,5 s para N dispositivos registrados (lee sus tokens de argumentos
 o de un archivo). Escenarios: `normal`, `tienda` (aperturas frecuentes de vitrina), `falla_compresor` (la corriente cae
 y `t_int` sube), `puerta_olvidada`, `desconexion`.
 
@@ -125,7 +125,7 @@ Implementado el 2026-10-09 (backend sin commits). Precisiones y cambios respecto
 
 **Infra**
 - Usuarios del broker: `psitwin-backend` / `backend-dev-123` (lee) y `psitwin-dispositivo` / `dispositivo-dev-123` (publica). Config en
-  `PsiTwin_inventory/infra/mosquitto/`. Variables `MQTT_ENABLED`, `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`.
+  `backend/infra/mosquitto/`. Variables `MQTT_ENABLED`, `MQTT_HOST`, `MQTT_PORT`, `MQTT_USER`, `MQTT_PASSWORD`.
 - Hash del token de dispositivo: SHA-256 (no bcrypt: se valida en cada mensaje, 2 por segundo por equipo).
 - Si Mongo falla al escribir, se pierde ese segundo de lecturas (el motor sigue en memoria).
 - El rack F-01 de "Cámara Fría 1" está en 2–5 °C (se editó antes), así que el dispositivo demo hereda 2–5 °C, no 2–6.

@@ -1,6 +1,10 @@
-param([switch]$Detener)
+﻿param([switch]$Detener)
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path $PSScriptRoot -Parent
+$backendRoot = Split-Path $PSScriptRoot -Parent
+$projectRoot = Split-Path $backendRoot -Parent
+$frontendRoot = Join-Path $projectRoot 'frontend'
+$vite = Join-Path $frontendRoot 'node_modules\vite\bin\vite.js'
+if (-not (Test-Path -LiteralPath $vite)) { $vite = Join-Path $projectRoot 'node_modules\vite\bin\vite.js' }
 $runDir = Join-Path $projectRoot 'artifacts\forecasting-run.local'
 $stateFile = Join-Path $runDir 'procesos.json'
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
@@ -40,14 +44,14 @@ if (Test-Path -LiteralPath (Join-Path $projectRoot '.venv-forecasting\Scripts\py
 }
 $owned = @()
 try {
-    Push-Location -LiteralPath $projectRoot
+    Push-Location -LiteralPath $frontendRoot
     try {
         & npm.cmd run build
         if ($LASTEXITCODE -ne 0) { throw 'Fallo la compilacion de la web.' }
     } finally { Pop-Location }
-    $backend = Start-Process -FilePath $python -ArgumentList @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8001') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'backend.out.log') -RedirectStandardError (Join-Path $runDir 'backend.err.log') -PassThru
+    $backend = Start-Process -FilePath $python -ArgumentList @('-m', 'uvicorn', 'app.main:app', '--host', '127.0.0.1', '--port', '8001') -WorkingDirectory $backendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'backend.out.log') -RedirectStandardError (Join-Path $runDir 'backend.err.log') -PassThru
     $owned += @{ id = $backend.Id; started = $backend.StartTime.ToUniversalTime().ToString('o') }
-    $frontend = Start-Process -FilePath (Get-Command node.exe).Source -ArgumentList @('node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', '5174', '--strictPort') -WorkingDirectory $projectRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'frontend.out.log') -RedirectStandardError (Join-Path $runDir 'frontend.err.log') -PassThru
+    $frontend = Start-Process -FilePath (Get-Command node.exe).Source -ArgumentList @(('"' + $vite + '"'), 'preview', '--host', '127.0.0.1', '--port', '5174', '--strictPort') -WorkingDirectory $frontendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $runDir 'frontend.out.log') -RedirectStandardError (Join-Path $runDir 'frontend.err.log') -PassThru
     $owned += @{ id = $frontend.Id; started = $frontend.StartTime.ToUniversalTime().ToString('o') }
     $owned | ConvertTo-Json | Set-Content -LiteralPath $stateFile -Encoding UTF8
     $deadline = (Get-Date).AddSeconds(45)

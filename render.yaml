@@ -1,0 +1,36 @@
+# Blueprint de Render para el backend (monorepo).
+# Uso: Render → New → Blueprint → conectar repo → detecta este archivo.
+services:
+  - type: web
+    name: psitwin-backend
+    runtime: docker
+    plan: free
+    region: oregon
+    branch: main
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: MONGODB_URL
+        sync: false
+      - key: MONGODB_DATABASE
+        value: psitwin_inventory
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "60"
+      - key: CORS_ORIGINS
+        value: https://psitwin-frontend.vercel.app,http://localhost:5173
+      - key: FRONTEND_URL
+        value: https://psitwin-frontend.vercel.app
+      - key: EMAIL_ENABLED
+        value: "false"
+      # Sin broker MQTT en la nube todavía. Al desplegar Mosquitto,
+      # cambiar a true y definir MQTT_HOST/PORT/USER/PASSWORD.
+      - key: MQTT_ENABLED
+        value: "false"
+      - key: OLLAMA_BASE_URL
+        value: http://localhost:11434
+      - key: OLLAMA_MODEL
+        value: qwen3:4b

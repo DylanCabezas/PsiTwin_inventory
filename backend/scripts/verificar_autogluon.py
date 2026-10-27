@@ -13,6 +13,7 @@ import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+from app.config.paths import runtime_path
 
 
 def fingerprint(path):
@@ -25,11 +26,11 @@ def fingerprint(path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--artifact', type=Path, default=ROOT / 'artifacts/autogluon.local/psitwin_forecasting')
+    parser.add_argument('--artifact', type=Path, default=runtime_path('artifacts/autogluon.local/psitwin_forecasting'))
     parser.add_argument('--allow-downloads', action='store_true')
     args = parser.parse_args()
     root = args.artifact.resolve()
-    os.environ['HF_HOME'] = str(ROOT / 'artifacts/huggingface.local')
+    os.environ['HF_HOME'] = str(runtime_path('artifacts/huggingface.local'))
     os.environ['HF_HUB_OFFLINE'] = '0' if args.allow_downloads else '1'
     os.environ['OMP_NUM_THREADS'] = '2'
     os.environ['OPENBLAS_NUM_THREADS'] = '2'

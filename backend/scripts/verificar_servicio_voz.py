@@ -12,6 +12,7 @@ os.environ['HF_HUB_OFFLINE'] = '1'
 from fastapi import FastAPI
 import httpx
 from app.config.settings import settings
+from app.config.paths import runtime_path
 from app.controllers.local_voice_controller import router
 from app.dependencies.dependencies import require_empresa
 from app.dto.auth_dto import UsuarioActual
@@ -20,7 +21,7 @@ from app.services.local_voice_service import voice_service
 
 async def main():
     settings.saiki_voice_python = sys.executable
-    settings.saiki_voice_site_packages = str(ROOT / '.voice.local/Lib/site-packages')
+    settings.saiki_voice_site_packages = str(runtime_path('.voice.local/Lib/site-packages'))
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[require_empresa] = lambda: UsuarioActual(rol='EMPRESA', id_empresa='voice-smoke-test')
@@ -44,6 +45,7 @@ async def main():
                 print('stt', results['stt'], flush=True)
     finally:
         await voice_service.close()
+        (ROOT / 'artifacts').mkdir(exist_ok=True)
         (ROOT / 'artifacts/voz-http-validacion.json').write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding='utf-8')
     assert all(results.get(name, {}).get('status') == 200 for name in ('em_santa', 'em_alex', 'stt'))
 

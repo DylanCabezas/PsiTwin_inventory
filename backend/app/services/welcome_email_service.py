@@ -75,17 +75,19 @@ class WelcomeEmailService:
     async def deliver(self, tenant):
         collection = self.collection()
         key = f'bienvenida:{tenant}'
-        row = await collection.find_one_and_update({'_id': key, 'status': {'$in': ['PENDIENTE', 'ERROR', 'CONFIGURACION_PENDIENTE']}},
+        row = await collection.find_one_and_update({'_id': key, 'status': {'$in': ['PENDIENTE', 'ERROR', 'CONFIGURACION_PENDIENTE', 'CONFIRMACION_PENDIENTE']}},
             {'$set': {'status': 'ENVIANDO', 'fecha_actualizacion': datetime.now(timezone.utc)}, '$inc': {'intentos': 1}},
             return_document=ReturnDocument.AFTER)
         if not row: return await self.status(tenant)
         status, error_code = 'ERROR', None
         try:
-            if not settings.email_enabled or not settings.smtp_secret or not settings.smtp_user:
+            company = await self.database()['empresas'].find_one({'id_empresa': tenant}, {'_id': 0})
+            if not company: raise ValueError('Empresa no encontrada')
+            if company.get('correo_verificado') is not True:
+                status, error_code = 'CONFIRMACION_PENDIENTE', 'CORREO_NO_VERIFICADO'
+            elif not settings.email_enabled or not settings.smtp_secret or not settings.smtp_user:
                 status, error_code = 'CONFIGURACION_PENDIENTE', 'SMTP_NO_CONFIGURADO'
             else:
-                company = await self.database()['empresas'].find_one({'id_empresa': tenant}, {'_id': 0})
-                if not company: raise ValueError('Empresa no encontrada')
                 message = build_welcome_message(company)
                 await asyncio.to_thread(self.sender, message)
                 status = 'ENVIADO'

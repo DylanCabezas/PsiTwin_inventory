@@ -11,6 +11,7 @@ import threading
 from uuid import uuid4
 
 from app.config.settings import get_settings
+from app.config.paths import runtime_path
 
 ROOT = Path(__file__).resolve().parents[2]
 MANIFEST = json.loads((ROOT / 'app/ml/autogluon_manifest.json').read_text(encoding='utf-8'))
@@ -82,7 +83,7 @@ class AutoGluonRuntime:
         self.responses = queue.Queue()
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.log = (self.cache_dir / 'worker.log').open('a', encoding='utf-8')
-        env = {**os.environ, 'HF_HOME': str(ROOT / 'artifacts/huggingface.local'), 'HF_HUB_OFFLINE': '1',
+        env = {**os.environ, 'HF_HOME': str(runtime_path('artifacts/huggingface.local')), 'HF_HUB_OFFLINE': '1',
                'PYTHONUTF8': '1', 'OMP_NUM_THREADS': '2', 'OPENBLAS_NUM_THREADS': '2'}
         self.process = subprocess.Popen([str(self.python), '-u', str(ROOT / 'app/ml/autogluon_worker.py'),
                                          '--model', str(self.root / 'modelo_evaluacion'), '--serve'],

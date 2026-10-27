@@ -155,9 +155,10 @@ function WelcomeEmailCard() {
   const { empresa } = useEmpresa()
   const status = useQuery({ queryKey: ['empresa', 'bienvenida', empresa?.id_empresa], queryFn: () => api.get<{ status: string; intentos: number }>('/empresas/me/bienvenida'), refetchInterval: query => ['PENDIENTE', 'ENVIANDO'].includes(query.state.data?.status ?? '') ? 3000 : false })
   const resend = useMutation({ mutationFn: () => api.post('/empresas/me/bienvenida/reintentar', {}), onSuccess: () => void status.refetch() })
-  const labels: Record<string, string> = { ENVIADO: 'Correo enviado', PENDIENTE: 'Pendiente de envío', CONFIGURACION_PENDIENTE: 'Pendiente de configurar el correo', ERROR: 'No se pudo enviar', ENVIANDO: 'Enviando o pendiente de confirmar', REVISAR_ENVIO: 'Es necesario revisar el resultado del envío', NO_SOLICITADO: 'Sin correo de bienvenida solicitado' }
+  const labels: Record<string, string> = { ENVIADO: 'Correo enviado', PENDIENTE: 'Pendiente de envío', CONFIRMACION_PENDIENTE: 'Verifica tu correo para recibir la bienvenida', CONFIGURACION_PENDIENTE: 'Pendiente de configurar el correo', ERROR: 'No se pudo enviar', ENVIANDO: 'Enviando o pendiente de confirmar', REVISAR_ENVIO: 'Es necesario revisar el resultado del envío', NO_SOLICITADO: 'Sin correo de bienvenida solicitado' }
   return <Card title="Correo de bienvenida"><p className="mb-3 text-sm text-fg-muted">{status.isError ? 'No se pudo consultar el estado.' : labels[status.data?.status ?? ''] ?? 'Consultando…'}</p>
-    <Button variant="secondary" loading={resend.isPending} disabled={!empresa?.nombre_ceo || ['ENVIADO', 'ENVIANDO', 'REVISAR_ENVIO'].includes(status.data?.status ?? '')} onClick={() => resend.mutate()}>Reintentar bienvenida</Button>
+    <Button variant="secondary" loading={resend.isPending} disabled={!empresa?.nombre_ceo || !empresa?.correo_verificado || ['ENVIADO', 'ENVIANDO', 'REVISAR_ENVIO'].includes(status.data?.status ?? '')} onClick={() => resend.mutate()}>Reintentar bienvenida</Button>
+    {!empresa?.correo_verificado && <p className="mt-2 text-xs text-fg-muted">Verifica tu correo para recibir la bienvenida.</p>}
     {!empresa?.nombre_ceo && <p className="mt-2 text-xs text-fg-muted">Guarda el nombre del CEO para personalizar la bienvenida.</p>}
     {resend.isError && <p role="alert" className="mt-3 text-sm text-danger">{resend.error instanceof ApiError ? resend.error.detail : 'No se pudo solicitar el envío.'}</p>}
   </Card>

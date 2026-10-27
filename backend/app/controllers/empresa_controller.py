@@ -92,7 +92,7 @@ async def register(
             data
         )
     )
-    background_tasks.add_task(welcome_email_service.deliver_safely, company['id_empresa'])
+    background_tasks.add_task(send_registration_verification, company['id_empresa'])
     return company
 
 
@@ -111,6 +111,7 @@ async def welcome_status(user: UsuarioActual = Depends(require_empresa)):
 @router.post('/empresas/me/bienvenida/reintentar', status_code=202)
 async def retry_welcome(background_tasks: BackgroundTasks, user: UsuarioActual = Depends(require_empresa)):
     company = await empresa_service.get_empresa_profile(user.id_empresa)
+    if company.get('correo_verificado') is not True: raise HTTPException(409, 'Verifica tu correo antes de recibir la bienvenida')
     if not company.get('nombre_ceo'): raise HTTPException(422, 'Guarda el nombre del CEO en tu perfil primero')
     await welcome_email_service.enqueue(company)
     state = await welcome_email_service.status(user.id_empresa)
@@ -352,11 +353,15 @@ async def send_empresa_email_verification(
 async def verify_empresa_email(
     id_empresa: str,
     data: EmailVerificationCodeRequest,
+    background_tasks: BackgroundTasks,
     user: UsuarioActual = Depends(require_empresa),
 ):
     AccesoService.verificar_empresa(user, id_empresa)
-    return await email_verification_service.verify_entity_code(
+    result = await email_verification_service.verify_entity_code(
         "empresa",
         id_empresa,
         data.codigo,
     )
+    if result.get('verified'):
+        background_tasks.add_task(welcome_email_service.deliver_safely, id_empresa)
+    return result

@@ -159,3 +159,35 @@ def test_voice_disconnect_cancels_worker_inference(monkeypatch):
         assert exc.value.status_code == 408
         assert process.killed and service.process is None and not service.lock.locked()
     asyncio.run(run())
+
+
+def test_voice_success_does_not_hang_when_disconnect_check_consumes_cancellation(monkeypatch):
+    import threading
+    entered = threading.Event()
+
+    class Process:
+        def poll(self): return None
+
+    class Request:
+        async def is_disconnected(self):
+            entered.set()
+            try:
+                await asyncio.sleep(60)
+            except asyncio.CancelledError:
+                # Matches a disconnect check whose inner cancellation scope
+                # consumes the watcher's cancellation.
+                return False
+
+    async def run():
+        service = LocalVoiceService()
+        service.process = Process()
+
+        def exchange(*args):
+            assert entered.wait(1)
+            return {'audio': 'test'}
+
+        monkeypatch.setattr(service, 'exchange', exchange)
+        result = await asyncio.wait_for(service.execute({}, Request()), timeout=2)
+        assert result == {'audio': 'test'} and not service.lock.locked()
+
+    asyncio.run(run())

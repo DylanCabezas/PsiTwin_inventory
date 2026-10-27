@@ -1,5 +1,17 @@
 # Actualización de PsiTwin: autenticación, monitoreo y voz local
 
+## Estructura después de integrar el remoto
+
+El código reside ahora en `backend/app` y `frontend/src`. Las referencias a `app/`,
+`scripts/`, `tests/` y `requirements*.txt` de esta guía son relativas a `backend/`;
+las referencias a `src/` son relativas a `frontend/`. Los informes anteriores se
+conservan como evidencia histórica. Consulta los resultados de esta integración en
+[INTEGRACION_ACTUALIZACION.md](INTEGRACION_ACTUALIZACION.md).
+
+Se conserva el `.env` de la raíz sin copiar secretos. `backend/.env` tiene prioridad.
+Las rutas de modelos y entornos buscan primero en `backend/` y reutilizan los archivos
+existentes de la raíz. Para una instalación nueva, crea los entornos dentro de `backend/`.
+
 ## Ejecutar en este equipo
 
 El Python al que apuntaban `.venv`, `venv` y `.venv-1` ya no estaba disponible. Se descargó Python 3.12.10 desde python.org dentro de `.runtime.local/python`, se instalaron las dependencias del backend allí y se creó `.voice.local` para las dependencias de voz. No se cambiaron los entornos de AutoGluon.
@@ -15,10 +27,12 @@ ollama list
 ollama pull qwen3:4b
 
 # Backend con bucle compatible con aiomqtt en Windows.
-.runtime.local/python/python.exe -m app.run --host 127.0.0.1 --port 8000
+cd backend
+../.runtime.local/python/python.exe -m app.run --host 127.0.0.1 --port 8000
 
 # Frontend: abre http://localhost:5173, también para comenzar Google OAuth.
-npm.cmd run dev -- --host 127.0.0.1 --port 5173
+# Desde la raíz, en otra terminal:
+npm.cmd --prefix frontend run dev -- --host 127.0.0.1 --port 5173
 ```
 
 `iniciar.cmd` conserva su función y ahora puede utilizar el Python portable si `.venv` falla. Usa `app.run` y abre `http://localhost:5173`. Un servidor que ya estaba abierto debe reiniciarse para recoger los cambios; el lanzador conserva su comportamiento de reutilizar servidores existentes. No se reinició una instancia de producción durante las pruebas.
@@ -43,7 +57,7 @@ SENSOR_DISCONNECT_SECONDS=5
 SENSOR_MAX_READING_AGE_SECONDS=5
 ```
 
-Para una instalación normal con Python 3.12:
+Para una instalación normal con Python 3.12, desde `backend/`:
 
 ```powershell
 py -3.12 -m venv .voice.local
@@ -56,6 +70,10 @@ En ese caso usa `SAIKI_VOICE_PYTHON=.voice.local/Scripts/python.exe` y deja `SAI
 La descarga de Whisper `small` se interrumpió. Se eligió `base`, CPU/int8, como configuración inicial más ligera; se puede volver a `small` mediante `SAIKI_STT_MODEL`. No se sustituyó Kokoro ni se utilizaron archivos de ElevenLabs.
 
 ## Cambios de autenticación y bienvenida
+
+Tras integrar el remoto, el registro antiguo solicita verificación y la bienvenida
+solo se envía con `correo_verificado=true`. La confirmación activa el envío; los
+reintentos también exigen el correo verificado y conservan la idempotencia.
 
 Dependencias principales instaladas para voz: Kokoro 0.9.4, faster-whisper 1.2.1, Torch 2.8.0, Transformers 4.57.6, soundfile 0.13.1 y espeakng-loader 0.2.4. Los rangos de compatibilidad están en `requirements-voice.txt`; el backend conserva `requirements.txt`.
 

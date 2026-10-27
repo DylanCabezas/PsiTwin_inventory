@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi import HTTPException, Request
 from app.config.settings import settings
+from app.config.paths import BACKEND_ROOT, runtime_path
 
 VOICES = {'em_santa': 'Saiki Cálido', 'em_alex': 'Saiki Natural'}
 
@@ -51,11 +52,11 @@ class LocalVoiceService:
                             'SAIKI_TTS_MODEL': settings.saiki_tts_model, 'SAIKI_STT_MODEL': settings.saiki_stt_model,
                             'SAIKI_PIPER_MODEL': settings.saiki_piper_model, 'PYTHONIOENCODING': 'utf-8'}
                         environment['SAIKI_VOICE_SITE_PACKAGES'] = settings.saiki_voice_site_packages
-                        environment.setdefault('HF_HOME', str(Path('.voice.local/cache').resolve()))
+                        environment.setdefault('HF_HOME', str(runtime_path('.voice.local/cache')))
                         self.process = subprocess.Popen([str(executable), '-u', '-m',
                             'app.services.local_voice_worker'], stdin=subprocess.PIPE,
                             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                            env=environment,
+                            env=environment, cwd=BACKEND_ROOT,
                             **({'creationflags': 0x08000000} if os.name == 'nt' else {}))
                     # Pipe I/O stays in a thread; CPU inference stays in the killable process.
                     # This also works on Windows SelectorEventLoop, required by aiomqtt.
@@ -69,8 +70,14 @@ class LocalVoiceService:
                     await self.close()
                     raise
         task = asyncio.create_task(perform())
+        stopping = asyncio.Event()
         async def disconnected():
-            while not await request.is_disconnected():
+            # Starlette checks disconnect inside an AnyIO cancellation scope.
+            # That scope can consume an external cancellation at just the wrong
+            # instant; the explicit stop flag also ends that race on success.
+            while not stopping.is_set():
+                if await request.is_disconnected():
+                    return
                 await asyncio.sleep(.15)
         watcher = asyncio.create_task(disconnected())
         try:
@@ -84,6 +91,7 @@ class LocalVoiceService:
         except Exception as exc:
             raise HTTPException(503, 'El servicio de voz local no está disponible.') from exc
         finally:
+            stopping.set()
             task.cancel()
             watcher.cancel()
             await asyncio.gather(task, watcher, return_exceptions=True)

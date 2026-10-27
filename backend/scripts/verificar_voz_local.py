@@ -12,11 +12,12 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-os.environ.setdefault('HF_HOME', str(ROOT / '.voice.local' / 'cache'))
+os.environ.setdefault('HF_HOME', str((ROOT.parent if (ROOT.parent / '.voice.local').exists() else ROOT) / '.voice.local/cache'))
 os.environ.setdefault('SAIKI_STT_MODEL', 'base')
 
 from app.services.local_voice_worker import run
 
+(ROOT / 'artifacts').mkdir(exist_ok=True)
 report = ROOT / 'artifacts' / 'voz-local-validacion.json'
 results = json.loads(report.read_text(encoding='utf-8')) if '--stt-only' in sys.argv and report.is_file() else {}
 for voice in (() if '--stt-only' in sys.argv else ('em_santa', 'em_alex')):

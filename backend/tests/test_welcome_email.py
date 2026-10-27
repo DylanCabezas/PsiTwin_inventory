@@ -15,6 +15,7 @@ from app.services import welcome_email_service as welcome
 from app.services import smtp_transport
 
 COMPANY = {'id_empresa': 'e', 'nombre': 'Empresa', 'nombre_ceo': 'Carlos', 'correo': 'carlos@example.com',
+           'correo_verificado': True,
            'ruc': '20123456789', 'sector': 'Alimentos', 'telefono': '987654321',
            'fecha_creacion': '2026-10-24T10:00:00Z', 'fecha_actualizacion': '2026-10-24T10:00:00Z'}
 
@@ -191,9 +192,9 @@ def test_registration_and_retry_routes_keep_tenant_and_existing_company(configur
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
             response = await client.post('/auth/register', json={k: COMPANY[k] for k in ('nombre', 'nombre_ceo', 'correo', 'sector', 'telefono', 'ruc')} | {'password': 'secure-test'})
             assert response.status_code == 201 and response.json()['nombre_ceo'] == 'Carlos'
-            verification.assert_not_awaited()
+            verification.assert_awaited_once_with('empresa', 'e')
             assert create.call_args.args[0]['nombre_ceo'] == 'Carlos'
-            assert (await service.status('e'))['status'] == 'ERROR'
+            assert (await service.status('e'))['status'] == 'PENDIENTE'
             assert (await client.post('/empresas/me/bienvenida/reintentar')).status_code in (401, 403)
             app.dependency_overrides[get_usuario_activo] = lambda: UsuarioActual(rol='EMPRESA', id_empresa='e')
             assert (await client.post('/empresas/me/bienvenida/reintentar')).status_code == 202
@@ -232,3 +233,38 @@ def test_smtp_lost_ack_is_uncertain_but_close_failure_after_ack_is_not_a_failed_
     smtp_transport.send_message(welcome.build_welcome_message(COMPANY))
     server.send_message.side_effect = smtplib.SMTPServerDisconnected('lost DATA acknowledgement')
     with pytest.raises(smtp_transport.DeliveryUncertain): smtp_transport.send_message(welcome.build_welcome_message(COMPANY))
+
+
+def test_unverified_registration_waits_then_verification_sends_once(configured, monkeypatch):
+    from app.controllers import empresa_controller as controller
+    from app.dependencies.dependencies import get_usuario_activo
+    from app.dto.auth_dto import UsuarioActual
+    configured['empresas'].rows[0]['correo_verificado'] = False
+    sender = Mock()
+    service = welcome.WelcomeEmailService(lambda: configured, sender)
+    monkeypatch.setattr(controller, 'welcome_email_service', service)
+    monkeypatch.setattr(controller.empresa_service, 'get_empresa_profile',
+                        AsyncMock(side_effect=lambda _: copy.deepcopy(configured['empresas'].rows[0])))
+
+    async def verify(*args):
+        configured['empresas'].rows[0]['correo_verificado'] = True
+        return {'verified': True, 'status': 'VERIFIED', 'email': COMPANY['correo']}
+
+    monkeypatch.setattr(controller.email_verification_service, 'verify_entity_code', verify)
+    instance = FastAPI()
+    instance.include_router(controller.router)
+    instance.dependency_overrides[get_usuario_activo] = lambda: UsuarioActual(rol='EMPRESA', id_empresa='e')
+
+    async def run():
+        await service.enqueue(COMPANY)
+        assert (await service.deliver('e'))['status'] == 'CONFIRMACION_PENDIENTE'
+        sender.assert_not_called()
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=instance), base_url='http://test') as client:
+            assert (await client.post('/empresas/me/bienvenida/reintentar')).status_code == 409
+            for _ in range(2):
+                result = await client.post('/empresas/e/correo/verificar', json={'codigo': '123456'})
+                assert result.status_code == 200 and result.json()['verified']
+        assert (await service.status('e'))['status'] == 'ENVIADO'
+        sender.assert_called_once()
+
+    asyncio.run(run())
