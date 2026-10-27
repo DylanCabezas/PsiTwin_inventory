@@ -19,7 +19,7 @@ export default function GoogleCallbackPage() {
     if (!code || !state || params.has('error')) { setError('La autorización se canceló o no es válida.'); return }
     void api.post<GoogleResult>('/auth/google/complete', { code, state, binding: googleBinding() }, { auth: false }).then(result => {
       if (result.registration_required && result.registration_ticket) {
-        saveGoogleRegistration(result.registration_ticket, result.verified_email)
+        saveGoogleRegistration(result.registration_ticket, result.verified_email, result.company)
         navigate('/registro?google=continuar', { replace: true })
       } else {
         apply(authApi.fromGoogle(result))

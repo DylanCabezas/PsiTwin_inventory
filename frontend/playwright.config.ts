@@ -1,0 +1,26 @@
+import { defineConfig } from '@playwright/test'
+
+export default defineConfig({
+  testDir: './e2e',
+  workers: 1,
+  timeout: 60_000,
+  use: { baseURL: 'http://localhost:15173', channel: 'msedge', headless: true, screenshot: 'only-on-failure', trace: 'retain-on-failure' },
+  outputDir: '../artifacts/auth-browser.local/results',
+  reporter: [['list'], ['json', { outputFile: '../artifacts/auth-browser.local/results.json' }]],
+  webServer: [
+    {
+      command: '..\\.runtime.local\\python\\python.exe -m uvicorn tests.browser_auth_app:app --app-dir ../backend --host 127.0.0.1 --port 18080',
+      url: 'http://127.0.0.1:18080/__test/status',
+      reuseExistingServer: false,
+      timeout: 60_000,
+      env: { PSITWIN_BROWSER_TEST: '1', SECRET_KEY: 'browser-test-signing-key-not-used-in-production', GOOGLE_CLIENT_ID: 'browser-test-client', GOOGLE_CLIENT_SECRET: 'browser-test-secret', GOOGLE_REDIRECT_URI: 'http://localhost:15173/auth/google/callback', FRONTEND_URL: 'http://localhost:15173', EMAIL_ENABLED: 'true', SMTP_USER: 'psitwin2026@gmail.com', SMTP_APP_PASSWORD: 'browser-test-only', MQTT_ENABLED: 'false' },
+    },
+    {
+      command: 'npm.cmd run dev -- --host 127.0.0.1 --port 15173 --strictPort',
+      url: 'http://localhost:15173/registro',
+      reuseExistingServer: false,
+      env: { VITE_PROXY_TARGET: 'http://127.0.0.1:18080', VITE_API_URL: '/api/v1' },
+      timeout: 60_000,
+    },
+  ],
+})

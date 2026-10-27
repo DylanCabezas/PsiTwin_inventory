@@ -1,6 +1,9 @@
 # app/main.py
 
 from contextlib import asynccontextmanager
+from app.utils.log_redaction import install_auth_log_redaction
+
+install_auth_log_redaction()
 
 from fastapi import (
     Depends,

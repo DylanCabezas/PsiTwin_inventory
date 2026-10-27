@@ -28,12 +28,13 @@ describe('Google origin binding', () => {
     await expect(startGoogle()).rejects.toThrow('Dirección de Google no válida')
     expect(assign).not.toHaveBeenCalled()
   })
-  it('sends the registration password only to the backend and never saves it in the draft', async () => {
+  it('preserves company data before Google without sending a password', async () => {
     const url = 'https://accounts.google.com/o/oauth2/v2/auth?redirect_uri=' + encodeURIComponent('http://localhost:5173/auth/google/callback')
     vi.mocked(api.post).mockResolvedValue({ authorization_url: url })
     const company = { nombre: 'Empresa', nombre_ceo: 'Carlos', sector: 'Alimentos', ruc: '20123456789', telefono: '987654321' }
-    await startGoogle(company, undefined, undefined, 'registration-test-password')
-    expect(api.post).toHaveBeenCalledWith('/auth/google/start', expect.objectContaining({ company, registration_password: 'registration-test-password' }), expect.objectContaining({ auth: false }))
-    expect(sessionStorage.getItem('psitwin.google.company')).not.toContain('registration-test-password')
+    await startGoogle(company)
+    expect(api.post).toHaveBeenCalledWith('/auth/google/start', expect.objectContaining({ company, purpose: 'register' }), expect.objectContaining({ auth: false }))
+    expect(vi.mocked(api.post).mock.calls[0]?.[1]).not.toHaveProperty('registration_password')
+    expect(JSON.parse(sessionStorage.getItem('psitwin.google.company')!)).toEqual(company)
   })
 })

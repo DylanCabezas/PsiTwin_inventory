@@ -7,12 +7,12 @@ vi.mock('@/api/auth', () => ({ useLogin: () => ({ mutate: vi.fn(), isPending: fa
 vi.mock('@/components/ui', async original => ({ ...await original<typeof import('@/components/ui')>(), useApiErrorHandler: () => vi.fn() }))
 
 describe('Gmail and PsiTwin password login', () => {
-  it('shows only Gmail and the registered password, without a Google login button', () => {
+  it('supports both Google and Gmail with the registered password', () => {
     const html = renderToStaticMarkup(<MemoryRouter><LoginPage /></MemoryRouter>)
     expect(html).toContain('Correo Gmail')
     expect(html).toContain('usuario@gmail.com')
     expect(html).toContain('name="password"')
-    expect(html).not.toContain('Iniciar sesión con Google')
+    expect(html).toContain('Iniciar sesión con Google')
     expect(html).not.toContain('O ingresa')
   })
   it('requires the exact gmail.com domain and a password', () => {

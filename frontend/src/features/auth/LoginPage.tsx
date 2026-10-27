@@ -10,6 +10,7 @@ import { Button, Field, Icon, Input, useApiErrorHandler } from '@/components/ui'
 import { correo } from '@/lib/zod'
 import { paths } from '@/paths'
 import { AuthLayout } from './AuthLayout'
+import { startGoogle } from './googleAuth'
 
 export const loginSchema = z.object({
   correo: correo().refine(value => value.toLowerCase().endsWith('@gmail.com'), 'Usa tu correo de Gmail (@gmail.com)'),
@@ -38,6 +39,7 @@ export default function LoginPage() {
   const handleError = useApiErrorHandler()
   const [credencialesInvalidas, setCredencialesInvalidas] = useState(false)
   const [accesoDenegado, setAccesoDenegado] = useState<string | null>(null)
+  const [googleBusy, setGoogleBusy] = useState(false)
 
   const form = useForm<LoginForm>({ resolver: zodResolver(loginSchema), defaultValues: { correo: '', password: '' } })
   const { register, handleSubmit, formState } = form
@@ -93,6 +95,11 @@ export default function LoginPage() {
       )}
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+        <Button type="button" variant="secondary" fullWidth loading={googleBusy} onClick={async () => {
+          setGoogleBusy(true)
+          try { await startGoogle() } catch (error) { handleError(error, { title: 'No se pudo iniciar sesión con Google' }) }
+          finally { setGoogleBusy(false) }
+        }}>Iniciar sesión con Google</Button>
         <Field label="Correo Gmail" error={formState.errors.correo?.message} required>
           <Input type="email" autoComplete="username" inputMode="email" size="lg" placeholder="usuario@gmail.com" {...register('correo')} />
         </Field>

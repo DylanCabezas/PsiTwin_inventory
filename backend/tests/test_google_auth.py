@@ -54,6 +54,40 @@ def app():
 def state(url): return parse_qs(urlsplit(url).query)['state'][0]
 
 
+def test_registration_requires_password_and_uses_server_business_snapshot(monkeypatch):
+    async def run():
+        async with isolated_database(monkeypatch) as db:
+            monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'snapshot-sub', 'email': 'carlos@gmail.com'}))
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
+                start = await client.post('/auth/google/start', json={'binding': BINDING, 'company': DETAILS, 'purpose': 'register'})
+                complete = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(start.json()['authorization_url']), 'code': 'test-code'})
+                data = complete.json()
+                assert 'access_token' not in data and data['company'] == DETAILS
+                assert await db.empresas.count_documents({}) == 0
+                finish = {'binding': BINDING, 'registration_ticket': data['registration_ticket'], 'company': {**DETAILS, 'nombre': 'Alterado'}}
+                for invalid in ({}, {'registration_password': 'short'}):
+                    assert (await client.post('/auth/google/register', json={**finish, **invalid})).status_code == 422
+                result = await client.post('/auth/google/register', json={**finish, 'registration_password': 'secure-password-2026'})
+                assert result.status_code == 200 and result.json()['empresa']['nombre'] == DETAILS['nombre']
+                stored = await db.empresas.find_one({})
+                assert stored['password'].startswith('$argon2id$')
+                assert (await client.post('/auth/google/register', json={**finish, 'registration_password': 'secure-password-2026'})).status_code == 400
+                assert await db.empresas.count_documents({}) == 1
+    asyncio.run(run())
+
+
+def test_auth_query_strings_are_redacted_in_server_logs():
+    import logging
+    from app.utils.log_redaction import AuthQueryFilter
+    record = logging.LogRecord('uvicorn.error', logging.INFO, '', 1, 'WebSocket %s', ('/ws/monitoreo?token=private-jwt&other=ok',), None)
+    assert AuthQueryFilter().filter(record)
+    assert 'private-jwt' not in record.getMessage() and 'other=ok' in record.getMessage()
+    from uvicorn.logging import AccessFormatter
+    access = logging.LogRecord('uvicorn.access', logging.INFO, '', 1, '%s - "%s %s HTTP/%s" %d', ('127.0.0.1', 'GET', '/ws?token=private-jwt', '1.1', 200), None)
+    AuthQueryFilter().filter(access)
+    assert 'private-jwt' not in AccessFormatter().format(access)
+
+
 def test_login_requires_exact_gmail_domain():
     from app.dto.auth_dto import LoginRequest
     from pydantic import ValidationError
@@ -80,17 +114,17 @@ def test_google_registration_enables_chosen_password_after_verified_identity(mon
             monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'password-google-sub', 'email': 'carlos@gmail.com'}))
             password = 'chosen-registration-password'
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
-                initial = {'binding': BINDING} if google_first else {'binding': BINDING, 'company': DETAILS, 'registration_password': password}
+                initial = {'binding': BINDING} if google_first else {'binding': BINDING, 'company': DETAILS, 'purpose': 'register'}
                 start = await client.post('/auth/google/start', json=initial)
                 assert start.status_code == 200
                 flow = await db.google_oauth_flows.find_one({'_id': digest(state(start.json()['authorization_url']))})
                 assert password not in json.dumps(flow, default=str)
                 assert await db.empresas.count_documents({}) == 0
                 result = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(start.json()['authorization_url']), 'code': 'controlled-code'})
-                if google_first:
-                    assert result.json()['registration_required']
-                    assert result.json()['verified_email'] == 'carlos@gmail.com'
-                    result = await client.post('/auth/google/register', json={'binding': BINDING, 'company': DETAILS, 'registration_password': password, 'registration_ticket': result.json()['registration_ticket']})
+                assert result.json()['registration_required']
+                assert result.json()['verified_email'] == 'carlos@gmail.com'
+                assert await db.empresas.count_documents({}) == 0
+                result = await client.post('/auth/google/register', json={'binding': BINDING, 'company': DETAILS, 'registration_password': password, 'registration_ticket': result.json()['registration_ticket']})
                 assert result.status_code == 200
                 assert result.json()['empresa']['password_local_habilitada'] is True
                 assert password not in result.text
@@ -101,7 +135,7 @@ def test_google_registration_enables_chosen_password_after_verified_identity(mon
                 assert login.status_code == 200
                 assert (await client.post('/auth/login', json={'correo': 'carlos@gmail.com', 'password': 'incorrect-password'})).status_code == 401
                 # Registering again must never replace the existing account's password.
-                again = await client.post('/auth/google/start', json={**initial, 'company': DETAILS, 'registration_password': 'different-password'})
+                again = await client.post('/auth/google/start', json={'binding': BINDING})
                 confirmed = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(again.json()['authorization_url']), 'code': 'controlled-code'})
                 assert confirmed.status_code == 200
                 assert controller.verify_password(password, (await db.empresas.find_one({'google_sub': 'password-google-sub'}))['password'])
@@ -133,6 +167,9 @@ def test_google_registration_login_replay_and_legacy_password_session(monkeypatc
                 assert wrong.status_code == 400
                 result = await client.post('/auth/google/complete', json=payload)
                 assert result.status_code == 200
+                assert result.json()['registration_required']
+                assert await db.empresas.count_documents({}) == 0
+                result = await client.post('/auth/google/register', json={'binding': BINDING, 'registration_ticket': result.json()['registration_ticket'], 'registration_password': 'legacy-test-password'})
                 session = result.json(); token = session['access_token']
                 assert session['empresa']['nombre_ceo'] == 'Carlos' and session['empresa']['correo_verificado']
                 assert 'google_sub' not in session['empresa'] and 'password' not in session['empresa']
@@ -178,8 +215,9 @@ def test_google_unlinked_registration_and_secure_link_no_email_takeover(monkeypa
                 await service.finish_registration(required['registration_ticket'], BINDING, CompanyDetails(**DETAILS))
             await db.empresas.update_one({'id_empresa': result['empresa']['id_empresa']}, {'$unset': {'google_sub': ''}, '$set': {'password': hash_password('old-account-pass')}})
             start = await service.start(BINDING, CompanyDetails(**DETAILS))
+            duplicate = await service.complete(state(start['authorization_url']), 'code', BINDING)
             with pytest.raises(HTTPException) as error:
-                await service.complete(state(start['authorization_url']), 'code', BINDING)
+                await service.finish_registration(duplicate['registration_ticket'], BINDING, CompanyDetails(**DETAILS))
             assert error.value.status_code == 409
             async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
                 headers = {'Authorization': 'Bearer ' + result['access_token']}
@@ -204,7 +242,11 @@ def test_expired_and_concurrent_callbacks_never_create_duplicates(monkeypatch):
             start = await service.start(BINDING, CompanyDetails(**DETAILS))
             current = state(start['authorization_url'])
             results = await asyncio.gather(service.complete(current, 'code', BINDING), service.complete(current, 'code', BINDING), return_exceptions=True)
-            assert sum(isinstance(result, dict) and 'access_token' in result for result in results) == 1
+            assert sum(isinstance(result, dict) and result.get('registration_required') is True for result in results) == 1
+            assert await db.empresas.count_documents({}) == 0
+            ticket = next(result['registration_ticket'] for result in results if isinstance(result, dict))
+            finished = await asyncio.gather(service.finish_registration(ticket, BINDING, CompanyDetails(**DETAILS)), service.finish_registration(ticket, BINDING, CompanyDetails(**DETAILS)), return_exceptions=True)
+            assert sum(isinstance(result, dict) and 'access_token' in result for result in finished) == 1
             assert await db.empresas.count_documents({}) == 1
             assert await db.bienvenidas_email.count_documents({}) == 1
     asyncio.run(run())

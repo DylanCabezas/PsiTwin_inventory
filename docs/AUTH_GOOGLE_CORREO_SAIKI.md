@@ -1,14 +1,20 @@
 # Autenticación Google, bienvenida y Saiki
 
-## Registro actual: Google primero
+## Registro actual: empresa → Google → contraseña de PsiTwin
 
-La pantalla inicial solo muestra «Continuar con Google». Después de elegir Gmail
-y validar la identidad, el backend devuelve un ticket temporal ligado a la pestaña
-y el correo verificado para mostrarlo. A continuación se solicitan los datos de
-empresa y la nueva contraseña de PsiTwin, y «Crear mi cuenta» completa el registro.
-No se pide la contraseña de Gmail ni se guarda la contraseña de PsiTwin en el navegador.
+La pantalla inicial muestra empresa, CEO, RUC, sector y teléfono. El correo se
+obtiene de Google y se muestra como un atributo verificado, sin confiar en un
+correo escrito desde el frontend. «Continuar con Google» valida y conserva los
+datos en el flujo temporal del backend y en el borrador de la pestaña.
+Después de Google, el backend devuelve un ticket temporal y los datos conservados.
+Se muestra «Crear contraseña de PsiTwin», con contraseña nueva y confirmación.
+«Finalizar registro» crea la empresa, vincula `sub`, guarda Argon2id, establece la
+sesión y despacha la bienvenida idempotente. No hay una empresa definitiva antes
+de ese paso. No se pide la contraseña de Gmail ni se persiste la contraseña de
+PsiTwin en almacenamiento del navegador.
 Si el ticket expira o se consume, se vuelve a solicitar la verificación con Google.
-Las cuentas ya vinculadas acceden a su empresa sin crear otra cuenta.
+El login admite correo/contraseña y Google; una identidad vinculada accede a la
+misma empresa. Intentar registrarla de nuevo informa que ya existe, sin duplicarla.
 
 Si aparece `GOOGLE_NOT_CONFIGURED`, faltan las credenciales OAuth de la aplicación.
 No son la contraseña de Gmail ni `SMTP_APP_PASSWORD`. En este equipo se comprobó
@@ -32,7 +38,7 @@ La verificación antigua guardaba `fecha_verificacion_correo` como `datetime` de
 
 La aplicación usa JWT Bearer, con expiración `ACCESS_TOKEN_EXPIRE_MINUTES`. El cliente conserva token y sesión en `localStorage`, los restaura al recargar y sincroniza con `/auth/me`; cerrar sesión borra ambos y la caché. Un 401 de autenticación cierra la sesión; los fallos de MongoDB, correo o validación empresarial no se convierten en 401. No se utilizan cookies para OAuth. El callback vuelve al frontend y este intercambia el código con FastAPI mediante POST. El origen del frontend debe estar en `CORS_ORIGINS` cuando la API está en otro origen; el proxy de Vite permite usar `/api/v1` durante desarrollo.
 
-El registro sigue los dos pasos descritos al inicio de esta guía: primero Google; después datos de empresa y nueva contraseña de PsiTwin. El login conserva Gmail y la contraseña creada, con validación del dominio gmail.com en frontend y backend. Los endpoints OAuth se conservan para registro y vinculación segura; no se modifican las cuentas existentes.
+El registro sigue los tres pasos descritos al inicio de esta guía. El login admite Gmail/contraseña y el botón de Google, con validación del dominio gmail.com en frontend y backend. Los endpoints OAuth se conservan para registro y vinculación segura; no se modifican los datos empresariales de las cuentas existentes.
 
 ## Configuración manual de Google Cloud
 

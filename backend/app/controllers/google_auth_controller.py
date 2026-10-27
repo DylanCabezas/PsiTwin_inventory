@@ -1,5 +1,6 @@
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, Field
+from typing import Literal
 from app.dependencies.dependencies import require_empresa
 from app.dto.auth_dto import UsuarioActual
 from app.services.google_auth_service import GoogleAuthService, CompanyDetails, verify_password
@@ -13,7 +14,7 @@ service = GoogleAuthService()
 class StartRequest(BaseModel):
     binding: str = Field(min_length=40, max_length=128)
     company: CompanyDetails | None = None
-    registration_password: str | None = Field(default=None, min_length=6, max_length=128, repr=False)
+    purpose: Literal['login', 'register'] = 'login'
 
 class CompleteRequest(BaseModel):
     binding: str = Field(min_length=40, max_length=128)
@@ -22,7 +23,8 @@ class CompleteRequest(BaseModel):
 
 class FinishRequest(StartRequest):
     registration_ticket: str = Field(min_length=20, max_length=256)
-    company: CompanyDetails
+    company: CompanyDetails | None = None
+    registration_password: str = Field(min_length=8, max_length=128, repr=False)
 
 class LinkRequest(StartRequest):
     password: str = Field(min_length=1, max_length=128)
@@ -40,10 +42,9 @@ async def password_setup(data: PasswordSetupRequest, user: UsuarioActual = Depen
 
 @router.post('/start')
 async def start(data: StartRequest):
-    if data.registration_password is not None and data.company is None:
-        raise HTTPException(422, 'Completa los datos de la empresa para crear una contraseña.')
-    hashed = await asyncio.to_thread(hash_password, data.registration_password) if data.registration_password is not None else None
-    return await service.start(data.binding, data.company, password_hash=hashed)
+    if data.purpose == 'register' and data.company is None:
+        raise HTTPException(422, 'Completa los datos de la empresa antes de continuar con Google.')
+    return await service.start(data.binding, data.company, purpose=data.purpose)
 
 @router.post('/link')
 async def link(data: LinkRequest, user: UsuarioActual = Depends(require_empresa)):
@@ -68,7 +69,7 @@ async def complete(data: CompleteRequest, background_tasks: BackgroundTasks):
 
 @router.post('/register')
 async def register(data: FinishRequest, background_tasks: BackgroundTasks):
-    hashed = await asyncio.to_thread(hash_password, data.registration_password) if data.registration_password is not None else None
+    hashed = await asyncio.to_thread(hash_password, data.registration_password)
     result = await service.finish_registration(data.registration_ticket, data.binding, data.company, password_hash=hashed)
     background_tasks.add_task(deliver, result)
     return result

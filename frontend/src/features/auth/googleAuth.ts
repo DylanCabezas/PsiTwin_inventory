@@ -2,7 +2,7 @@ import { api, ApiError } from '@/api/client'
 import type { LoginResponseRaw } from '@/api/types'
 
 export type GoogleCompany = { nombre: string; nombre_ceo: string; sector: string; ruc: string; telefono: string }
-export type GoogleResult = LoginResponseRaw & { registration_required?: boolean; registration_ticket?: string; verified_email?: string }
+export type GoogleResult = LoginResponseRaw & { registration_required?: boolean; registration_ticket?: string; verified_email?: string; company?: GoogleCompany | null }
 const BINDING = 'psitwin.google.binding'
 const TICKET = 'psitwin.google.registration'
 const DRAFT = 'psitwin.google.company'
@@ -15,13 +15,13 @@ export function googleBinding() {
   }
   return binding
 }
-export async function startGoogle(company?: GoogleCompany, password?: string, newPassword?: string, registrationPassword?: string) {
+export async function startGoogle(company?: GoogleCompany, password?: string, newPassword?: string) {
   sessionStorage.removeItem(TICKET)
   sessionStorage.removeItem(EMAIL)
   const binding = googleBinding()
   if (company) sessionStorage.setItem(DRAFT, JSON.stringify(company))
   const result = await api.post<{ authorization_url: string }>(newPassword ? '/auth/google/password/start' : password === undefined ? '/auth/google/start' : '/auth/google/link',
-    { binding, company, ...(registrationPassword ? { registration_password: registrationPassword } : {}), ...(password === undefined ? {} : { password }), ...(newPassword ? { new_password: newPassword } : {}) }, { auth: password !== undefined || !!newPassword, logoutOnAuthError: false })
+    { binding, company, purpose: company ? 'register' : 'login', ...(password === undefined ? {} : { password }), ...(newPassword ? { new_password: newPassword } : {}) }, { auth: password !== undefined || !!newPassword, logoutOnAuthError: false })
   const url = new URL(result.authorization_url)
   if (url.origin !== 'https://accounts.google.com') throw new Error('Dirección de Google no válida')
   const callback = new URL(url.searchParams.get('redirect_uri') ?? '')
@@ -34,11 +34,13 @@ export function googleDraft(): Partial<GoogleCompany> {
 }
 export function pendingGoogleRegistration() { return sessionStorage.getItem(TICKET) }
 export function googleRegistrationEmail() { return sessionStorage.getItem(EMAIL) ?? '' }
-export function saveGoogleRegistration(ticket: string, email?: string) {
+export function saveGoogleRegistration(ticket: string, email?: string, company?: GoogleCompany | null) {
   sessionStorage.setItem(TICKET, ticket)
   if (email) sessionStorage.setItem(EMAIL, email)
   else sessionStorage.removeItem(EMAIL)
+  if (company) sessionStorage.setItem(DRAFT, JSON.stringify(company))
 }
+export function saveGoogleDraft(company: GoogleCompany) { sessionStorage.setItem(DRAFT, JSON.stringify(company)) }
 export function clearGoogleFlow() { for (const key of [BINDING, TICKET, DRAFT, EMAIL]) sessionStorage.removeItem(key) }
 export async function finishGoogleRegistration(company: GoogleCompany, registrationPassword?: string) {
   try {

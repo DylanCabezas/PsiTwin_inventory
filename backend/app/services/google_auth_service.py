@@ -61,7 +61,7 @@ class GoogleAuthService:
         await db['empresas'].create_index('ruc', unique=True,
             partialFilterExpression={'ruc': {'$type': 'string'}})
 
-    async def start(self, binding, company=None, link_company=None, password_hash=None):
+    async def start(self, binding, company=None, link_company=None, password_hash=None, purpose='login'):
         if not settings.google_client_id or not settings.google_client_secret:
             raise HTTPException(503, {'code': 'GOOGLE_NOT_CONFIGURED', 'detail': 'El acceso con Google aún no está configurado. Contacta al administrador.'})
         await self.indexes()
@@ -69,7 +69,7 @@ class GoogleAuthService:
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
         await self.database()['google_oauth_flows'].insert_one({
             '_id': digest(state), 'binding': digest(binding), 'nonce': nonce, 'verifier': verifier,
-            'company': company.model_dump() if company else None, 'link_company': link_company, 'password_hash': password_hash,
+            'company': company.model_dump() if company else None, 'link_company': link_company, 'password_hash': password_hash, 'purpose': purpose,
             'status': 'PENDING', 'expires_at': datetime.now(timezone.utc) + timedelta(seconds=settings.google_oauth_ttl_seconds),
         })
         return {'authorization_url': 'https://accounts.google.com/o/oauth2/v2/auth?' + urlencode({
@@ -149,15 +149,15 @@ class GoogleAuthService:
                 raise HTTPException(409, 'Esta identidad ya está vinculada.') from exc
             return self.session(company)
         if linked:
+            if flow.get('purpose') == 'register':
+                raise HTTPException(409, 'Esta cuenta Google ya está registrada. Inicia sesión para acceder a tu empresa.')
             return self.session(linked)
-        if flow.get('company'):
-            return await self.register(identity, CompanyDetails(**flow['company']), password_hash=flow.get('password_hash'))
         if identity['email'].rsplit('@', 1)[-1].lower() != 'gmail.com':
             raise HTTPException(422, 'Registra tu empresa con una cuenta Gmail (@gmail.com).')
         ticket = secrets.token_urlsafe(32)
-        await flows.insert_one({'_id': digest(ticket), 'binding': digest(binding), 'identity': identity,
+        await flows.insert_one({'_id': digest(ticket), 'binding': digest(binding), 'identity': identity, 'company': flow.get('company'),
             'status': 'REGISTRATION', 'expires_at': datetime.now(timezone.utc) + timedelta(minutes=10)})
-        return {'registration_required': True, 'registration_ticket': ticket, 'verified_email': identity['email']}
+        return {'registration_required': True, 'registration_ticket': ticket, 'verified_email': identity['email'], 'company': flow.get('company')}
 
     async def finish_registration(self, ticket, binding, company, password_hash=None):
         flow = await self.database()['google_oauth_flows'].find_one_and_update({
@@ -166,8 +166,11 @@ class GoogleAuthService:
         }, {'$set': {'status': 'CONSUMED'}})
         if not flow:
             raise HTTPException(400, 'La autorización expiró o ya fue utilizada.')
+        details = CompanyDetails(**flow['company']) if flow.get('company') else company
+        if details is None:
+            raise HTTPException(422, 'Completa los datos de tu empresa.')
         linked = await self.database()['empresas'].find_one({'google_sub': flow['identity']['sub']})
-        return self.session(linked) if linked else await self.register(flow['identity'], company, password_hash=password_hash)
+        return self.session(linked) if linked else await self.register(flow['identity'], details, password_hash=password_hash)
 
     async def register(self, identity, details, password_hash=None):
         if identity['email'].rsplit('@', 1)[-1].lower() != 'gmail.com':
