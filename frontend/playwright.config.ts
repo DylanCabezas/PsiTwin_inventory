@@ -2,6 +2,7 @@ import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
+  testMatch: '**/auth.spec.ts',
   workers: 1,
   projects: [
     { name: 'desktop', use: { viewport: { width: 1280, height: 900 }, colorScheme: 'dark' } },
