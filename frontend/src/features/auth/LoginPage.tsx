@@ -94,7 +94,8 @@ export default function LoginPage() {
       )}
 
       <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        <Button type="button" variant="secondary" fullWidth onClick={() => { void startGoogle().catch(e => handleError(e, { title: 'No se pudo conectar con Google' })) }}>Iniciar sesión con Google</Button>
+        <Button type="button" fullWidth onClick={() => { void startGoogle().catch(e => handleError(e, { title: 'No se pudo conectar con Google' })) }}>Iniciar sesión con Google</Button>
+        <p className="text-center text-sm text-fg-muted">O ingresa con tu correo y contraseña</p>
         <Field label="Correo" error={formState.errors.correo?.message} required>
           <Input type="email" autoComplete="email" inputMode="email" size="lg" placeholder="usuario@empresa.com" {...register('correo')} />
         </Field>

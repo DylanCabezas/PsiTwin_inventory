@@ -13,6 +13,7 @@ service = GoogleAuthService()
 class StartRequest(BaseModel):
     binding: str = Field(min_length=40, max_length=128)
     company: CompanyDetails | None = None
+    registration_password: str | None = Field(default=None, min_length=6, max_length=128, repr=False)
 
 class CompleteRequest(BaseModel):
     binding: str = Field(min_length=40, max_length=128)
@@ -39,7 +40,10 @@ async def password_setup(data: PasswordSetupRequest, user: UsuarioActual = Depen
 
 @router.post('/start')
 async def start(data: StartRequest):
-    return await service.start(data.binding, data.company)
+    if data.registration_password is not None and data.company is None:
+        raise HTTPException(422, 'Completa los datos de la empresa para crear una contraseña.')
+    hashed = await asyncio.to_thread(hash_password, data.registration_password) if data.registration_password is not None else None
+    return await service.start(data.binding, data.company, password_hash=hashed)
 
 @router.post('/link')
 async def link(data: LinkRequest, user: UsuarioActual = Depends(require_empresa)):
@@ -64,6 +68,7 @@ async def complete(data: CompleteRequest, background_tasks: BackgroundTasks):
 
 @router.post('/register')
 async def register(data: FinishRequest, background_tasks: BackgroundTasks):
-    result = await service.finish_registration(data.registration_ticket, data.binding, data.company)
+    hashed = await asyncio.to_thread(hash_password, data.registration_password) if data.registration_password is not None else None
+    result = await service.finish_registration(data.registration_ticket, data.binding, data.company, password_hash=hashed)
     background_tasks.add_task(deliver, result)
     return result

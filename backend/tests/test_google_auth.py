@@ -53,6 +53,50 @@ def app():
 
 def state(url): return parse_qs(urlsplit(url).query)['state'][0]
 
+
+@pytest.mark.parametrize('google_first', [False, True])
+def test_google_registration_enables_chosen_password_after_verified_identity(monkeypatch, google_first):
+    async def run():
+        async with isolated_database(monkeypatch) as db:
+            monkeypatch.setattr(controller.service, 'identity', AsyncMock(return_value={'sub': 'password-google-sub', 'email': 'carlos@example.com'}))
+            password = 'chosen-registration-password'
+            async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
+                initial = {'binding': BINDING} if google_first else {'binding': BINDING, 'company': DETAILS, 'registration_password': password}
+                start = await client.post('/auth/google/start', json=initial)
+                assert start.status_code == 200
+                flow = await db.google_oauth_flows.find_one({'_id': digest(state(start.json()['authorization_url']))})
+                assert password not in json.dumps(flow, default=str)
+                assert await db.empresas.count_documents({}) == 0
+                result = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(start.json()['authorization_url']), 'code': 'controlled-code'})
+                if google_first:
+                    assert result.json()['registration_required']
+                    result = await client.post('/auth/google/register', json={'binding': BINDING, 'company': DETAILS, 'registration_password': password, 'registration_ticket': result.json()['registration_ticket']})
+                assert result.status_code == 200
+                assert result.json()['empresa']['password_local_habilitada'] is True
+                assert password not in result.text
+                company = await db.empresas.find_one({'google_sub': 'password-google-sub'})
+                assert company['correo_verificado'] and company['password'] != password
+                assert controller.verify_password(password, company['password'])
+                login = await client.post('/auth/login', json={'correo': 'carlos@example.com', 'password': password})
+                assert login.status_code == 200
+                assert (await client.post('/auth/login', json={'correo': 'carlos@example.com', 'password': 'incorrect-password'})).status_code == 401
+                # Registering again must never replace the existing account's password.
+                again = await client.post('/auth/google/start', json={**initial, 'company': DETAILS, 'registration_password': 'different-password'})
+                confirmed = await client.post('/auth/google/complete', json={'binding': BINDING, 'state': state(again.json()['authorization_url']), 'code': 'controlled-code'})
+                assert confirmed.status_code == 200
+                assert controller.verify_password(password, (await db.empresas.find_one({'google_sub': 'password-google-sub'}))['password'])
+    asyncio.run(run())
+
+
+def test_missing_google_configuration_has_explicit_safe_error(monkeypatch):
+    monkeypatch.setattr(settings, 'google_client_id', '')
+    async def run():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app()), base_url='http://test') as client:
+            result = await client.post('/auth/google/start', json={'binding': BINDING})
+            assert result.status_code == 503
+            assert result.json()['detail']['code'] == 'GOOGLE_NOT_CONFIGURED'
+    asyncio.run(run())
+
 def test_google_registration_login_replay_and_legacy_password_session(monkeypatch):
     async def run():
         async with isolated_database(monkeypatch) as db:

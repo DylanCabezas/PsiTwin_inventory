@@ -14,12 +14,12 @@ export function googleBinding() {
   }
   return binding
 }
-export async function startGoogle(company?: GoogleCompany, password?: string, newPassword?: string) {
+export async function startGoogle(company?: GoogleCompany, password?: string, newPassword?: string, registrationPassword?: string) {
   sessionStorage.removeItem(TICKET)
   const binding = googleBinding()
   if (company) sessionStorage.setItem(DRAFT, JSON.stringify(company))
   const result = await api.post<{ authorization_url: string }>(newPassword ? '/auth/google/password/start' : password === undefined ? '/auth/google/start' : '/auth/google/link',
-    { binding, company, ...(password === undefined ? {} : { password }), ...(newPassword ? { new_password: newPassword } : {}) }, { auth: password !== undefined || !!newPassword, logoutOnAuthError: false })
+    { binding, company, ...(registrationPassword ? { registration_password: registrationPassword } : {}), ...(password === undefined ? {} : { password }), ...(newPassword ? { new_password: newPassword } : {}) }, { auth: password !== undefined || !!newPassword, logoutOnAuthError: false })
   const url = new URL(result.authorization_url)
   if (url.origin !== 'https://accounts.google.com') throw new Error('Dirección de Google no válida')
   const callback = new URL(url.searchParams.get('redirect_uri') ?? '')
@@ -33,9 +33,9 @@ export function googleDraft(): Partial<GoogleCompany> {
 export function pendingGoogleRegistration() { return sessionStorage.getItem(TICKET) }
 export function saveGoogleRegistration(ticket: string) { sessionStorage.setItem(TICKET, ticket) }
 export function clearGoogleFlow() { for (const key of [BINDING, TICKET, DRAFT]) sessionStorage.removeItem(key) }
-export async function finishGoogleRegistration(company: GoogleCompany) {
+export async function finishGoogleRegistration(company: GoogleCompany, registrationPassword?: string) {
   try {
-    return await api.post<GoogleResult>('/auth/google/register', { company, binding: googleBinding(), registration_ticket: pendingGoogleRegistration() }, { auth: false })
+    return await api.post<GoogleResult>('/auth/google/register', { company, ...(registrationPassword ? { registration_password: registrationPassword } : {}), binding: googleBinding(), registration_ticket: pendingGoogleRegistration() }, { auth: false })
   } catch (error) {
     if (error instanceof ApiError && [400, 409].includes(error.status)) sessionStorage.removeItem(TICKET)
     throw error

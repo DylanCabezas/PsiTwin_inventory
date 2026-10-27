@@ -2,11 +2,11 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
 import { Link, useNavigate } from 'react-router'
 import { z } from 'zod'
-import { useRegister, authApi, useAplicarLogin } from '@/api/auth'
+import { authApi, useAplicarLogin } from '@/api/auth'
 import { useState } from 'react'
 import { startGoogle, googleDraft, pendingGoogleRegistration, finishGoogleRegistration, clearGoogleFlow } from './googleAuth'
-import { Button, Field, Input, useApiErrorHandler, useToast } from '@/components/ui'
-import { correo, texto } from '@/lib/zod'
+import { Button, Field, Input, useApiErrorHandler } from '@/components/ui'
+import { texto } from '@/lib/zod'
 import { paths } from '@/paths'
 import { AuthLayout } from './AuthLayout'
 
@@ -16,12 +16,11 @@ const schema = z
     nombre_ceo: texto({ max: 100 }),
     ruc: z.string().trim().regex(/^\d{11}$/, 'El RUC debe tener 11 dígitos'),
     sector: texto({ max: 100 }),
-    correo: correo(),
     telefono: z
       .string()
       .trim()
       .regex(/^\+?[\d\s-]{6,20}$/, 'Teléfono no válido (solo dígitos, espacios o guiones)'),
-    password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres'),
+    password: z.string().min(6, 'La contraseña debe tener al menos 6 caracteres').max(128, 'Máximo 128 caracteres'),
     confirmar: z.string().min(1, 'Repite la contraseña'),
   })
   .refine((v) => v.password === v.confirmar, { path: ['confirmar'], message: 'Las contraseñas no coinciden' })
@@ -29,48 +28,32 @@ const schema = z
 type RegistroForm = z.input<typeof schema>
 
 export default function RegistroPage() {
-  const registro = useRegister()
   const navigate = useNavigate()
-  const toast = useToast()
   const handleError = useApiErrorHandler()
   const apply = useAplicarLogin()
   const [googleBusy, setGoogleBusy] = useState(false)
-  const [legacyRegistration, setLegacyRegistration] = useState(false)
 
   const form = useForm<RegistroForm>({
     resolver: zodResolver(schema),
-    defaultValues: { nombre: '', nombre_ceo: '', ruc: '', sector: '', correo: '', telefono: '', password: '', confirmar: '', ...googleDraft() },
+    defaultValues: { nombre: '', nombre_ceo: '', ruc: '', sector: '', telefono: '', password: '', confirmar: '', ...googleDraft() },
   })
   const { register, handleSubmit, formState } = form
   const err = formState.errors
   async function withGoogle() {
-    const fields = ['nombre', 'nombre_ceo', 'ruc', 'sector', 'telefono'] as const
-    if (!await form.trigger([...fields])) return
+    if (!await form.trigger()) return
     const values = form.getValues()
     const company = { nombre: values.nombre.trim(), nombre_ceo: values.nombre_ceo.trim(), ruc: values.ruc.trim(), sector: values.sector.trim(), telefono: values.telefono.trim() }
     setGoogleBusy(true)
     try {
       if (pendingGoogleRegistration()) {
-        const result = await finishGoogleRegistration(company)
+        const result = await finishGoogleRegistration(company, values.password)
         apply(authApi.fromGoogle(result)); clearGoogleFlow(); navigate('/', { replace: true })
-      } else await startGoogle(company)
+      } else await startGoogle(company, undefined, undefined, values.password)
     } catch (e) { handleError(e, { title: 'No se pudo registrar con Google' }) }
     finally { setGoogleBusy(false) }
   }
 
-  const onSubmit = handleSubmit(({ confirmar: _c, ...body }) => {
-    registro.mutate(body, {
-      onSuccess: ({ token }) => {
-        if (token) {
-          toast.success('Empresa registrada. Configura tu primer almacén.')
-          navigate(paths.onboardingAlmacen, { replace: true })
-        } else {
-          navigate(`${paths.login}?motivo=registro`, { replace: true })
-        }
-      },
-      onError: (e) => handleError(e, { form, title: 'No se pudo registrar la empresa' }),
-    })
-  })
+  const onSubmit = handleSubmit(() => withGoogle())
 
   return (
     <AuthLayout
@@ -101,27 +84,20 @@ export default function RegistroPage() {
           </Field>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          {legacyRegistration && <Field label="Correo" error={err.correo?.message} required hint="Será tu usuario de acceso.">
-            <Input type="email" autoComplete="email" inputMode="email" {...register('correo')} />
-          </Field>}
           <Field label="Teléfono" error={err.telefono?.message} required>
             <Input type="tel" autoComplete="tel" inputMode="tel" placeholder="987654321" {...register('telefono')} />
           </Field>
         </div>
-        {legacyRegistration && <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Contraseña" error={err.password?.message} required hint="Mínimo 6 caracteres.">
             <Input type="password" autoComplete="new-password" {...register('password')} />
           </Field>
           <Field label="Repetir contraseña" error={err.confirmar?.message} required>
             <Input type="password" autoComplete="new-password" {...register('confirmar')} />
           </Field>
-        </div>}
-        <Button type="button" size="lg" fullWidth loading={googleBusy} onClick={() => void withGoogle()}>Continuar con Google</Button>
-        <p className="text-sm text-fg-muted">Google proporciona tu correo verificado. No necesitas un código adicional.</p>
-        <Button type="button" variant="ghost" onClick={() => setLegacyRegistration(!legacyRegistration)}>{legacyRegistration ? 'Ocultar registro con contraseña' : 'Usar registro con contraseña'}</Button>
-        {legacyRegistration && <Button type="submit" variant="secondary" size="lg" fullWidth loading={registro.isPending} className="mt-2">
-          Crear cuenta
-        </Button>}
+        </div>
+        <Button type="submit" size="lg" fullWidth loading={googleBusy}>Continuar con Google</Button>
+        <p className="text-sm text-fg-muted">Google verifica tu correo. Después podrás iniciar sesión con Google o con ese correo y la contraseña que acabas de crear.</p>
       </form>
     </AuthLayout>
   )

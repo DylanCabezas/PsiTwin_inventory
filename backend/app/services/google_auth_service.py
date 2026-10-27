@@ -63,7 +63,7 @@ class GoogleAuthService:
 
     async def start(self, binding, company=None, link_company=None, password_hash=None):
         if not settings.google_client_id or not settings.google_client_secret:
-            raise HTTPException(503, 'Configura GOOGLE_CLIENT_ID y GOOGLE_CLIENT_SECRET para utilizar Google.')
+            raise HTTPException(503, {'code': 'GOOGLE_NOT_CONFIGURED', 'detail': 'El acceso con Google aún no está configurado. Contacta al administrador.'})
         await self.indexes()
         state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
         challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b'=').decode()
@@ -151,13 +151,13 @@ class GoogleAuthService:
         if linked:
             return self.session(linked)
         if flow.get('company'):
-            return await self.register(identity, CompanyDetails(**flow['company']))
+            return await self.register(identity, CompanyDetails(**flow['company']), password_hash=flow.get('password_hash'))
         ticket = secrets.token_urlsafe(32)
         await flows.insert_one({'_id': digest(ticket), 'binding': digest(binding), 'identity': identity,
             'status': 'REGISTRATION', 'expires_at': datetime.now(timezone.utc) + timedelta(minutes=10)})
         return {'registration_required': True, 'registration_ticket': ticket}
 
-    async def finish_registration(self, ticket, binding, company):
+    async def finish_registration(self, ticket, binding, company, password_hash=None):
         flow = await self.database()['google_oauth_flows'].find_one_and_update({
             '_id': digest(ticket), 'binding': digest(binding), 'status': 'REGISTRATION',
             'expires_at': {'$gt': datetime.now(timezone.utc)},
@@ -165,9 +165,9 @@ class GoogleAuthService:
         if not flow:
             raise HTTPException(400, 'La autorización expiró o ya fue utilizada.')
         linked = await self.database()['empresas'].find_one({'google_sub': flow['identity']['sub']})
-        return self.session(linked) if linked else await self.register(flow['identity'], company)
+        return self.session(linked) if linked else await self.register(flow['identity'], company, password_hash=password_hash)
 
-    async def register(self, identity, details):
+    async def register(self, identity, details, password_hash=None):
         await self.indexes()
         db = self.database()
         payload = details.validated(identity['email'])
@@ -179,7 +179,7 @@ class GoogleAuthService:
         now = datetime.now(timezone.utc).isoformat()
         company = {**details.model_dump(), 'nombre_ceo': payload.nombre_ceo, 'nombre': payload.nombre.strip(),
             'id_empresa': str(uuid4()), 'correo': str(payload.correo), 'google_sub': identity['sub'],
-            'google_registration_ruc': payload.ruc, 'password': await asyncio.to_thread(hash_password, payload.password), 'password_local_habilitada': False,
+            'google_registration_ruc': payload.ruc, 'password': password_hash or await asyncio.to_thread(hash_password, payload.password), 'password_local_habilitada': bool(password_hash),
             'correo_verificado': True, 'fecha_verificacion_correo': now, 'fecha_creacion': now, 'fecha_actualizacion': now}
         try:
             await db['empresas'].insert_one(company)
