@@ -40,7 +40,7 @@ def period(text, now=None):
     return start.astimezone(timezone.utc), end.astimezone(timezone.utc)
 
 
-async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=None):
+async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=None, horas=None):
     from fastapi import HTTPException
     if user is None or not user.es_empresa:
         raise HTTPException(403, 'Se requiere una sesión de empresa para consultar sensores con Saiki.')
@@ -68,10 +68,13 @@ async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=Non
         devices = [d for d in devices if not (d.get('estado') or {}).get('conectado')]
     field = 'hum' if 'humedad' in text else 't_amb' if 'ambiente' in text else 't_int' if 'temperatura' in text else 'corriente' if 'corriente' in text else None
     since, until = period(text)
+    if id_dispositivo and horas is not None:
+        until = datetime.now(timezone.utc)
+        since = until - timedelta(hours=horas)
     ids = [d['id_dispositivo'] for d in devices]
     lines, evidence = [], {'desde': since.isoformat(), 'hasta': until.isoformat(), 'dispositivos': []}
-    temporal = bool(re.search('ayer|semana|mes|madrugada|histor|maxim|minim|promedio|cambio|estuvieron|hubo', text))
-    if 'alerta' in text or 'fuera de rango' in text or 'madrugada' in text:
+    temporal = horas is not None or bool(re.search('ayer|semana|mes|madrugada|histor|maxim|minim|promedio|cambio|tendencia|estuvieron|hubo', text))
+    if 'alerta' in text or 'incidente' in text or 'fuera de rango' in text or 'madrugada' in text:
         query = {'id_empresa': user.id_empresa, 'id_dispositivo': {'$in': ids}}
         if temporal:
             query['fecha_creacion'] = {'$gte': since, '$lt': until}
@@ -98,6 +101,12 @@ async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=Non
         rack = racks.get(d.get('id_rack'), {}).get('codigo') or 'sin rack'
         lines.append(f"{d['nombre']} ({d['id_dispositivo']}) · Rack {rack} · {'conectado' if state.get('conectado') else 'desconectado'}. Tipos: {', '.join(LABELS[p][0] for p in LABELS if p in available) or 'aún sin datos de tipos' }.")
         stats = {}
+        for p in LABELS:
+            if p == 'puerta' or (field and p != field):
+                continue
+            limits = (d.get('limites_efectivos') or d.get('limites') or {}).get(p) or {}
+            if limits:
+                lines.append(f"Umbrales de {LABELS[p][0]}: mínimo {limits.get('min', 'sin configurar')}, máximo {limits.get('max', 'sin configurar')} {LABELS[p][1]}.")
         if temporal:
             stats = await LecturaRepository.resumen(user.id_empresa, d['id_dispositivo'], since, until)
             if field == 't_int' and 'interna' not in text and 't_int' not in stats and 't_amb' in stats:
@@ -116,9 +125,11 @@ async def consultar_sensores(user, question, id_dispositivo=None, id_almacen=Non
                 lines.append(f"{label}: mínimo {values['min']}, máximo {values['max']}, promedio {values['prom']:.2f} {unit}; {values['n']} mediciones. Estadísticas de minutos del periodo completo.")
             if trend is not None:
                 lines.append(f"El promedio de la segunda mitad cambió {trend:+.2f} {LABELS[field][1]} respecto de la primera. Esto describe las lecturas disponibles y no demuestra su causa.")
+            elif field and re.search('cambio|evol|tendencia', text):
+                lines.append('No hay suficientes mediciones en ambas mitades del periodo para determinar una tendencia.')
             if not stats or (field and field not in stats):
                 lines.append('No hay mediciones históricas disponibles en el periodo; no puedo calcular extremos ni tendencias.')
-        elif field:
+        if field:
             value = latest.get(field)
             timestamp = latest.get('ts')
             if isinstance(timestamp, str):

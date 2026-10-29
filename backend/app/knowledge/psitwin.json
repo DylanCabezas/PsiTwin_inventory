@@ -145,7 +145,7 @@
       "OPERARIO"
     ],
     "source": "src/features/monitoreo/RackMonitor.tsx; src/features/monitoreo/HistorialSensor.tsx; src/features/monitoreo/DispositivoDetallePage.tsx",
-    "answer": "En Sensores → Monitoreo, selecciona almacén, zona y rack en Monitoreo por rack. El selector muestra los tipos comunicados por los dispositivos; un rack sin dispositivos dice Sin sensores. Pulsa el tipo y, si hay varios dispositivos, elige uno. Revisa conexión, fecha de lectura, medición y umbrales. El Historial permite última hora, 24 horas, 7 días, 30 días o un rango personalizado, con gráfico y tabla paginados. Los datos ausentes no indican normalidad. Las tarjetas inferiores conservan acceso al detalle, edición, token y alertas del dispositivo. Una alerta no confirma daño físico."
+    "answer": "En Sensores → Monitoreo, selecciona almacén, zona y rack en Monitoreo por rack. El selector muestra los tipos comunicados por los dispositivos; un rack sin dispositivos dice Sin sensores. Pulsa el tipo y, si hay varios dispositivos, elige uno. Revisa conexión, fecha de lectura, medición y umbrales. El Historial permite última hora, 24 horas, 7 días, 30 días o un rango personalizado, con gráfico y tabla paginados. Los datos ausentes no indican normalidad. Las tarjetas inferiores conservan acceso al detalle, edición, token y alertas del dispositivo. Una alerta no confirma daño físico. En Saiki, Explora tus sensores permite elegir Equipo, Medición y Periodo (1, 6, 24 horas o 7 días). Pulsa Saiki, explícame este equipo para interpretar la medición seleccionada, sus umbrales y los incidentes del periodo. El equipo permanece como contexto para preguntas posteriores; puedes quitarlo en Contexto de la consulta. Para conversar por voz, pulsa Iniciar conversación por voz y permite el micrófono. Al terminar de hablar se envía la grabación tras una pausa; también puedes pulsar Enviar grabación. Saiki responde y vuelve a escucharte. Puedes pausar, reanudar o salir."
   },
   {
     "id": "pronosticos",
@@ -162,6 +162,24 @@
     ],
     "source": "src/features/analisis/AnalisisPage.tsx; app/services/analisis_service.py",
     "answer": "Como empresa abre Análisis, selecciona almacén y producto, cambia a la vista de predicción y elige 1, 7, 30 o 90 días en Días a pronosticar. AutoGluon calcula la demanda cuando hay un modelo e historial válidos. La demanda prevista no es el stock real. Si faltan datos o el modelo no está disponible, la plataforma debe indicarlo; no se inventan pronósticos."
+  },
+  {
+    "id": "voz_saiki",
+    "keywords": [
+      "microfono",
+      "voz de saiki",
+      "conversacion por voz",
+      "transcripcion",
+      "reconocimiento",
+      "freetts",
+      "jorge"
+    ],
+    "route": "/saiki",
+    "roles": [
+      "EMPRESA"
+    ],
+    "source": "frontend/src/features/saiki/ttsProvider.ts; frontend/src/features/saiki/SaikiPresence.tsx",
+    "answer": "En Saiki, pulsa Iniciar conversación por voz y permite el micrófono en HTTPS o localhost. El reconocimiento del navegador puede enviar audio a su proveedor y requiere compatibilidad y conexión. Se envían las transcripciones definitivas automáticamente; las preguntas y respuestas quedan escritas en el chat. También puedes escribir. Mientras Saiki habla, el micrófono se detiene para evitar ecos; al terminar vuelve a escuchar. Usa Interrumpir y preguntar, Pausar, Reanudar o Salir de la voz. La mini ventana conserva la sesión al navegar y permite minimizar, ampliar o cerrar la voz. La voz está fijada en Jorge (México), con velocidad natural; no hay panel de edición de voz ni botón Enviar grabación. Jorge debe estar disponible entre las voces del navegador. Si falta, Saiki lo indica y conserva la respuesta escrita; no usa otra voz como sustituta ni afirma estar utilizando FreeTTS. No se guardan grabaciones del micrófono."
   },
   {
     "id": "capacidades",

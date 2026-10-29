@@ -3,6 +3,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useSaikiVoice } from './useSaikiVoice'
+import { LocalRecognition } from './localVoice'
 import { browserTts } from './ttsProvider'
 
 class FakeRecognition {
@@ -45,7 +46,7 @@ describe('Saiki voice session', () => {
   })
   afterEach(() => { act(() => root.unmount()); vi.useRealTimers(); vi.unstubAllGlobals(); vi.clearAllMocks() })
   const advance = () => act(() => { vi.advanceTimersByTime(500) })
-  it('enumerates real provider voices, persists selection and applies rate and volume', () => {
+  it('enumerates real provider voices, persists selection and forces natural speed even with old preferences', () => {
     const installed = [{ voiceURI: 'es-one', name: 'Voz instalada', lang: 'es-PE' }, { voiceURI: 'en-one', name: 'English installed', lang: 'en-US' }]
     Object.assign(window.speechSynthesis, { getVoices: () => installed })
     // Remount so getVoices is read as it would be on the voiceschanged event.
@@ -56,8 +57,8 @@ describe('Saiki voice session', () => {
     expect(voice.voices.map(v => v.id)).toEqual(['es-one', 'en-one'])
     act(() => voice.configure({ voiceId: 'es-one', rate: 1.3, volume: .5 }))
     act(() => voice.speak('Frase de prueba'))
-    expect(speak.mock.calls[0]![0]).toMatchObject({ voice: installed[0], rate: 1.3, volume: .5, text: 'Frase de prueba' })
-    expect(JSON.parse(localStorage.getItem('psitwin.saiki.voice')!)).toMatchObject({ voiceId: 'es-one', rate: 1.3, volume: .5 })
+    expect(speak.mock.calls[0]![0]).toMatchObject({ voice: installed[0], rate: 1, volume: .5, text: 'Frase de prueba' })
+    expect(JSON.parse(localStorage.getItem('psitwin.saiki.voice')!)).toMatchObject({ voiceId: 'es-one', rate: 1, volume: .5 })
   })
   it('ignores silence, fillers and noise without sending a transcript', () => {
     act(() => voice.start())
@@ -179,4 +180,75 @@ describe('Saiki voice session', () => {
     expect(first.onresult).toBeNull()
     expect(FakeRecognition.instances).toHaveLength(1)
   })
+  it('does not open a second microphone on repeated activation', () => {
+    act(() => { voice.start(); voice.start(); voice.resume() })
+    expect(FakeRecognition.instances).toHaveLength(1)
+  })
+  it('ignores a duplicate or partial result and a late callback from an old turn', () => {
+    act(() => voice.start())
+    const result = FakeRecognition.instances[0]!.onresult!
+    const final = { resultIndex: 0, results: { length: 1, 0: { isFinal: true, 0: { transcript: 'Muéstrame los sensores' } } } }
+    act(() => result({ ...final, results: { length: 1, 0: { ...final.results[0], isFinal: false } } }))
+    expect(onText).not.toHaveBeenCalled()
+    act(() => { result(final); result(final) })
+    expect(onText).toHaveBeenCalledOnce()
+    act(() => voice.release())
+    advance()
+    act(() => result(final))
+    expect(onText).toHaveBeenCalledOnce()
+  })
+  it('recovers listening after TTS fails and preserves the error', () => {
+    act(() => { voice.start(); voice.hold(); voice.speak('Respuesta visible'); voice.release() })
+    const utterance = speak.mock.calls[0]![0] as FakeUtterance
+    act(() => utterance.onerror?.())
+    advance()
+    expect(voice.listening).toBe(true)
+    expect(voice.error).toContain('respuesta sigue disponible')
+  })
+  it('releases a stalled playback rather than blocking the microphone forever', () => {
+    act(() => { voice.start(); voice.speak('Respuesta') })
+    act(() => vi.advanceTimersByTime(16_000))
+    expect(voice.preparing).toBe(false)
+    expect(voice.listening).toBe(true)
+  })
+  it.each(['session-expired', 'busy', 'unsupported-audio', 'timeout', 'network'])('pauses on %s without retry loops', code => {
+    act(() => voice.start())
+    act(() => FakeRecognition.instances[0]!.onerror?.({ error: code }))
+    advance()
+    expect(voice.paused).toBe(true)
+    expect(voice.error).not.toContain('instalación')
+    expect(FakeRecognition.instances).toHaveLength(1)
+  })
+  it('allows replay after microphone permission was denied, even when previously muted', () => {
+    act(() => voice.start())
+    act(() => FakeRecognition.instances[0]!.onerror?.({ error: 'not-allowed' }))
+    act(() => voice.toggleVoice())
+    expect(voice.paused).toBe(true)
+    act(() => voice.replay('Respuesta que quiero escuchar'))
+    expect(speak).toHaveBeenCalledOnce()
+    expect(voice.voiceEnabled).toBe(true)
+    expect(voice.paused).toBe(true)
+  })
+  it('starts local capture and falls back once to browser recognition on local service failure', () => {
+    act(() => root.unmount())
+    root = createRoot(document.createElement('div'))
+    vi.stubGlobal('MediaRecorder', class {})
+    vi.stubGlobal('navigator', { mediaDevices: { getUserMedia: vi.fn() } })
+    let localInstance!: LocalRecognition
+    const localStart = vi.spyOn(LocalRecognition.prototype, 'start').mockImplementation(function (this: LocalRecognition) { localInstance = this; this.onstart?.() })
+    const localAbort = vi.spyOn(LocalRecognition.prototype, 'abort').mockImplementation(() => {})
+    function Automatic() { voice = useSaikiVoice(onText, 'psitwin.saiki.voice', browserTts); return null }
+    act(() => root.render(<Automatic />))
+    act(() => voice.start())
+    expect(localStart).toHaveBeenCalledOnce()
+    expect(FakeRecognition.instances).toHaveLength(0)
+    act(() => localInstance.onerror?.({ error: 'local-unavailable' }))
+    expect(localAbort).toHaveBeenCalled()
+    expect(FakeRecognition.instances).toHaveLength(1)
+    expect(voice.listening).toBe(true)
+    expect(voice.paused).toBe(false)
+    act(() => voice.exit())
+    localStart.mockRestore(); localAbort.mockRestore()
+  })
+
 })

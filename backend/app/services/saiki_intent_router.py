@@ -26,6 +26,12 @@ class SaikiIntentRouter:
     def classify(cls, message: str, history: list[dict] | None = None) -> SaikiIntent:
         text = cls._normalize(message)
         plain = re.sub(r'[^a-z0-9\s]', '', text).strip()
+        if 'explora tus sensores' in text:
+            return SaikiIntent('platform_help', frozenset())
+        if re.search(r'microfono|voz de saiki|conversacion por voz|transcripcion|reconocimiento|freetts|\bjorge\b', text):
+            return SaikiIntent('platform_help', frozenset())
+        if re.search(r'ofert|proveedor|distribuidor|solicitud|pedido|despacho|recepcion|rechaz|faltante|costarian|cuanto cuesta|cada cuantos dias.*pedido|kilos?.*solicitar|frecuencia.*reposicion|grafico.*demanda', text):
+            return SaikiIntent('abastecimiento', frozenset())
         if re.search(r'quien eres|quien es saiki|que puedes hacer|como me ayudas|como puedes ayudar|que haces|presentate', text):
             return SaikiIntent('identity', frozenset())
         if re.fullmatch(r'(muchas )?gracias( saiki)?|adios( saiki)?|hasta luego|nos vemos', plain):
@@ -75,6 +81,8 @@ class SaikiIntentRouter:
             return SaikiIntent('warehouses', frozenset({'get_warehouse_status'}))
         if not qualified and re.search(r'\bcuanto (?:stock|inventario)\b', text) and re.search(r'\btengo\b', text):
             return SaikiIntent('stock_total', frozenset({'get_warehouse_status'}))
+        if not other_operation and not re.search(r'\b(?:dias?|semanas?|meses|precio|cost|tendre|necesitare)\b', text) and (re.search(r'\bcantidad\b|\bcuant[oa]s?\b.*\b(?:tengo|hay|queda|quedan|tenemos|disponible)', text)):
+            return SaikiIntent('stock_quantity', frozenset({'get_warehouse_status'}))
         categories = [
             ('movements', r'movimiento|entrada|salida|venta|historial', {'get_recent_movements'}),
             ('alerts', r'alerta|aviso', {'get_active_alerts'}),

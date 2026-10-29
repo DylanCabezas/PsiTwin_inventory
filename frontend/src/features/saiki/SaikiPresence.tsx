@@ -40,15 +40,14 @@ export function SaikiPresence({ compact = false }: { compact?: boolean }) {
         {(session.pending || voice.speaking || voice.preparing || voice.listening || voice.transcribing) && <Button variant="secondary" onClick={session.stop}>Detener respuesta</Button>}
         {!voice.active ? <Button icon="mic" disabled={!voice.canListen} onClick={() => { voice.start(); session.setMinimized(false) }} className="!border-violet-400 !bg-violet-500 !text-white hover:!bg-violet-400">Iniciar conversación por voz</Button> : <>
           <Button variant="secondary" onClick={voice.paused ? voice.resume : voice.pause} className="!border-white/20 !bg-white/10 !text-white">{voice.paused ? 'Reanudar' : 'Pausar'}</Button>
-          {voice.listening && <Button variant="secondary" onClick={voice.finishRecording}>Enviar grabación</Button>}
-          {voice.speaking && <Button variant="ghost" onClick={voice.interrupt} className="!text-blue-100">Interrumpir y preguntar</Button>}
+          {(voice.speaking || voice.preparing) && <Button variant="ghost" onClick={voice.interrupt} className="!text-blue-100">Interrumpir y preguntar</Button>}
           {!compact && <Button variant="ghost" onClick={() => session.setMinimized(true)} className="!text-blue-100">Mini ventana</Button>}
           <Button variant="ghost" onClick={voice.exit} className="!text-blue-100">Salir de la voz</Button>
         </>}
       </div>
       {!voice.canListen && <p className="mt-2 text-xs text-blue-100">Voz no disponible en este navegador. Puedes seguir por texto.</p>}
+      {!voice.active && <p className="mt-2 text-xs text-blue-100">{voice.preferences.sttEngine === 'browser' ? 'Al activar el micrófono aceptas usar el reconocimiento del navegador, que puede enviar audio a su proveedor.' : 'El audio se transcribe en el servidor de PsiTwin y no se guarda. Usa HTTPS o localhost y permite el micrófono.'}</p>}
       {voice.error && <p role="alert" className="mt-3 text-sm text-amber-200">{voice.error}</p>}
-      {voice.active && !compact && <p className="mt-3 text-xs text-blue-200/60">La sesión sigue abierta hasta que salgas. También puedes decir «Saiki, pausa» o «Saiki, salir».</p>}
     </div>
   </div>
 }

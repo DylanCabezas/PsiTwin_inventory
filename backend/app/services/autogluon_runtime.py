@@ -8,6 +8,7 @@ from pathlib import Path
 import queue
 import subprocess
 import threading
+import time
 from uuid import uuid4
 
 from app.config.settings import get_settings
@@ -32,6 +33,7 @@ class AutoGluonRuntime:
         self.lock = threading.Lock()
         self.memory = OrderedDict()
         self.log = None
+        self._interpreter_check = (0.0, False)
         self._fingerprint_state = None
         self._fingerprint_value = None
         atexit.register(self.close)
@@ -55,7 +57,21 @@ class AutoGluonRuntime:
 
     def status(self):
         missing = []
-        if not self.python.is_file(): missing.append('Entorno aislado con autogluon.timeseries==1.6.1, torch y dependencias')
+        if not self.python.is_file():
+            missing.append('Entorno aislado con autogluon.timeseries==1.6.1, torch y dependencias')
+        else:
+            checked, usable = self._interpreter_check
+            if time.monotonic() - checked > 60:
+                try:
+                    probe = subprocess.run([str(self.python), '-c', 'import sys; assert sys.version_info >= (3, 10)'],
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                        creationflags=getattr(subprocess, 'CREATE_NO_WINDOW', 0))
+                    usable = probe.returncode == 0
+                except (OSError, subprocess.TimeoutExpired):
+                    usable = False
+                self._interpreter_check = (time.monotonic(), usable)
+            if not usable:
+                missing.append('El intérprete aislado no arranca; revise pyvenv.cfg y la instalación base de Python')
         for name in ['predictor.pkl', 'learner.pkl', 'models/trainer.pkl', 'models/WeightedEnsemble/model.pkl']:
             if not (self.root / 'modelo_evaluacion' / name).is_file(): missing.append('modelo_evaluacion/' + name)
         report_path = self.root / 'runtime_validation.json'

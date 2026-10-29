@@ -7,6 +7,10 @@ describe('Saiki navigation and narration', () => {
     expect(suggestedGuide('Abre mi inventario')?.to).toBe('/inventario')
     expect(suggestedGuide('Muéstrame los gráficos de temperatura')?.to).toBe('/monitoreo')
     expect(requestsNavigation('¿Cómo está mi inventario?')).toBe(false)
+    for (const [phrase, route] of [['quiero ver mi inventario', '/inventario'], ['llévame a sensores', '/monitoreo'], ['muéstrame los sensores', '/monitoreo'], ['abre la sección de productos', '/productos']]) {
+      expect(requestsNavigation(phrase!)).toBe(true)
+      expect(suggestedGuide(phrase!)?.to).toBe(route)
+    }
     expect(suggestedGuide('abre https://evil.example')).toBeNull()
     expect(suggestedGuide('elimina todos los datos')).toBeNull()
   })

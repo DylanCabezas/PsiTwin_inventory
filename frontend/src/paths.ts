@@ -5,6 +5,7 @@
 const e = encodeURIComponent
 
 export const paths = {
+  plano: (id: string) => `/almacenes/${encodeURIComponent(id)}/plano`,
   login: '/login',
   registro: '/registro',
   onboardingAlmacen: '/onboarding/almacen',
@@ -29,6 +30,7 @@ export const paths = {
 
   saiki: '/saiki',
   analisis: '/analisis',
+  abastecimiento: '/abastecimiento',
   monitoreo: '/monitoreo',
   dispositivo: (id: string) => `/monitoreo/${e(id)}`,
   perfil: '/perfil',

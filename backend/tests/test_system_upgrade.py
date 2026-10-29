@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException
 
 from app.config.settings import settings
 from app.controllers.local_voice_controller import router
-from app.dependencies.dependencies import require_empresa
+from app.dependencies.dependencies import require_empresa_u_operario as require_empresa
 from app.dto.auth_dto import UsuarioActual
 from app.dto.empresa_dto import EmpresaResponse
 from app.repositories.lectura_repository import LecturaRepository

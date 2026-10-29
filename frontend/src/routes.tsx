@@ -52,11 +52,15 @@ export const routes: RouteObject[] = [
                     children: [
                       { index: true, element: <InicioPorRol /> },
                       { path: 'productos', ...page(() => import('@/features/productos/ProductosPage')) },
+                      { path: 'abastecimiento', ...page(() => import('@/features/abastecimiento/AbastecimientoPage')) },
                       { path: 'productos/:idProducto', ...page(() => import('@/features/productos/ProductoDetallePage')) },
                       { path: 'ordenes/:idOrden', ...page(() => import('@/features/ordenes/OrdenDetallePage')) },
                       {
                         element: <RequireRol roles={['EMPRESA', 'OPERARIO']} />,
                         children: [
+                          { path: 'analisis', ...page(() => import('@/features/analisis/AnalisisPage')) },
+                          { path: 'saiki', ...page(() => import('@/features/saiki/SaikiPage')) },
+                          { path: 'almacenes/:idAlmacen/plano', ...page(() => import('@/features/almacenes/PlanoAlmacenPage')) },
                           { path: 'almacenes/:idAlmacen', ...page(() => import('@/features/almacenes/AlmacenDetallePage')) },
                           { path: 'almacenes/:idAlmacen/zonas/:idZona', ...page(() => import('@/features/almacenes/ZonaDetallePage')) },
                           { path: 'inventario', ...page(() => import('@/features/inventario/InventarioPage')) },
@@ -73,8 +77,6 @@ export const routes: RouteObject[] = [
                         children: [
                           { path: 'operarios', ...page(() => import('@/features/operarios/OperariosPage')) },
                           { path: 'proveedores', ...page(() => import('@/features/proveedores/ProveedoresPage')) },
-                          { path: 'saiki', ...page(() => import('@/features/saiki/SaikiPage')) },
-                          { path: 'analisis', ...page(() => import('@/features/analisis/AnalisisPage')) },
                           { path: 'perfil', ...page(() => import('@/features/perfil/PerfilPage')) },
                         ],
                       },

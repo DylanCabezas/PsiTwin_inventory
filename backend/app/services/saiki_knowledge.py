@@ -5,6 +5,9 @@ ARTICLES = json.loads((Path(__file__).resolve().parents[1] / 'knowledge/psitwin.
 INTRODUCTION = '¡Hola! 👋 Soy Saiki Ψ, tu asistente inteligente de PsiTwin. Estoy aquí para ayudarte a gestionar tu inventario, conocer el estado de tus almacenes, interpretar predicciones de demanda y resolver dudas sobre cómo utilizar la plataforma. ¿Qué puedo hacer por ti hoy?'
 
 def help_answer(normalized):
+    if any(word in normalized for word in ('microfono', 'voz de saiki', 'conversacion por voz', 'transcripcion', 'reconocimiento', 'freetts', 'jorge')):
+        article = next(a for a in ARTICLES if a['id'] == 'voz_saiki')
+        return article['answer'], {'seccion': article['route'], 'articulo': article['id']}
     if any(word in normalized for word in ('sensor', 'monitoreo', 'temperatura', 'humedad')):
         article = next(a for a in ARTICLES if a['id'] == 'sensores')
         return article['answer'], {'seccion': article['route'], 'articulo': article['id']}

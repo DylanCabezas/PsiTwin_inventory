@@ -18,7 +18,7 @@ export function suggestedGuide(question: string): SaikiGuide | null {
 }
 
 export function requestsNavigation(question: string): boolean {
-  return /\b(ve|vamos|ir|abre|abrir|muestra|muestrame|lleva|llevame|navega)\b/.test(normalize(question))
+  return /\b(ve|vamos|ir|abre|abrir|muestra|muestrame|lleva|llevame|navega)\b|\bquiero ver\b/.test(normalize(question))
 }
 
 export function voiceCommand(text: string): 'pause' | 'exit' | null {

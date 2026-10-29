@@ -6,11 +6,28 @@ from app.repositories.demanda_historica_repository import DemandaHistoricaReposi
 
 
 class AnalisisRepository(SerieDemandaRepository):
+    async def purchase_history(self, tenant, warehouse, product, cutoff):
+        pipeline = [
+            {'$match': {'id_empresa': tenant, 'id_almacen': warehouse, 'estado': {'$ne': 'CANCELADA'}}},
+            {'$lookup': {'from': 'detalles_reposicion', 'localField': 'id_orden_reposicion', 'foreignField': 'id_orden_reposicion', 'as': 'lineas'}},
+            {'$unwind': '$lineas'}, {'$match': {'lineas.id_producto': product}},
+            {'$group': {'_id': {'$dateToString': {'format': '%Y-%m-%d', 'date': '$fecha_orden', 'timezone': 'America/Lima'}}, 'demanda': {'$sum': '$lineas.cantidad_solicitada'}}},
+            {'$match': {'_id': {'$lte': cutoff.isoformat(), '$ne': None}}},
+            {'$project': {'_id': 0, 'fecha': '$_id', 'demanda': 1}}, {'$sort': {'fecha': 1}}]
+        return await get_database()['ordenes_reposicion'].aggregate(pipeline).to_list(length=None)
+
+    async def received_product(self, warehouse, product):
+        return bool(await get_database()['movimientos'].find_one({'id_almacen': warehouse, 'id_producto': product,
+            'tipo_movimiento': 'ENTRADA', 'motivo_movimiento': 'RECEPCION', 'cantidad': {'$gt': 0}}, {'_id': 1}))
+
     """Read-only views. Warehouse + product are always scoped to the authenticated tenant."""
     async def catalog(self, tenant):
         db = get_database()
         warehouses = await db['almacenes'].find({'id_empresa': tenant}, {'_id': 0}).to_list(length=None)
-        products = await db['productos'].find({'id_empresa': tenant}, {'_id': 0}).to_list(length=None)
+        owned_w = [w.get('id', w.get('id_almacen')) for w in warehouses]
+        accepted = await db.movimientos.distinct('id_producto', {'id_almacen': {'$in': owned_w},
+            'tipo_movimiento': 'ENTRADA', 'motivo_movimiento': 'RECEPCION', 'cantidad': {'$gt': 0}})
+        products = await db['productos'].find({'id_empresa': tenant, 'id_producto': {'$in': accepted}}, {'_id': 0}).to_list(length=None)
         imported = await DemandaHistoricaRepository().catalog(tenant)
         known_w = {w.get('id', w.get('id_almacen')) for w in warehouses}
         known_p = {p['id_producto'] for p in products}

@@ -18,7 +18,7 @@ export type IsoDateTime = string
 /* ------------------------------------------------------------------ */
 
 /** Estados de rack que el frontend puede ASIGNAR (enum `EstadoRack` del backend). */
-export type EstadoRackEditable = 'DISPONIBLE' | 'LLENO' | 'MANTENIMIENTO'
+export type EstadoRackEditable = 'DISPONIBLE' | 'LLENO' | 'MANTENIMIENTO' | 'INACTIVO' | 'ARCHIVADO'
 /** Estados de rack que el frontend puede RECIBIR (incluye la versión antigua ACTIVO/INACTIVO). */
 export type EstadoRack = EstadoRackEditable | 'ACTIVO' | 'INACTIVO'
 
@@ -155,6 +155,10 @@ export interface CambiarPasswordBody {
  * (normalizados a number).
  */
 export interface Almacen extends Auditoria {
+  codigo?: string | null
+  descripcion?: string | null
+  ubicacion?: string | null
+  estado?: string
   id_almacen: Id
   id_empresa: Id
   nombre: string
@@ -167,6 +171,10 @@ export interface Almacen extends Auditoria {
 
 /** latitud −90..90 y longitud −180..180 (máx. 6 decimales) OBLIGATORIAS; area_m2 > 0; aforo ≥ 0. */
 export interface AlmacenCreate {
+  codigo?: string
+  descripcion?: string
+  ubicacion?: string
+  estado?: string
   id_empresa: Id
   nombre: string
   area_m2: number
@@ -180,6 +188,10 @@ export type AlmacenUpdate = Omit<AlmacenCreate, 'id_empresa'>
 
 /** El backend responde `id` (normalizado a `id_zona`) e incluye `id_empresa`. */
 export interface Zona extends Auditoria {
+  descripcion?: string | null
+  estado?: string
+  codigo?: string | null
+  max_racks?: number | null
   id_zona: Id
   id_almacen: Id
   id_empresa?: Id
@@ -194,6 +206,9 @@ export interface Zona extends Auditoria {
 }
 
 export interface ZonaCreate {
+  codigo?: string
+  descripcion?: string
+  estado?: string
   id_almacen: Id
   nombre: string
   tipo_zona: string
@@ -206,6 +221,8 @@ export interface ZonaCreate {
 export type ZonaUpdate = Omit<ZonaCreate, 'id_almacen'>
 
 export interface Rack extends Auditoria {
+  tipo_rack?: string | null
+  max_niveles?: number
   id_rack: Id
   id_zona: Id
   /** Código visible del rack (único en la zona). */
@@ -232,6 +249,8 @@ export interface RackDisponible extends Rack {
 
 /** POST /racks (EMPRESA). Nace DISPONIBLE. Temperaturas obligatorias si la zona es refrigerada (y solo entonces). */
 export interface RackCreate {
+  tipo_rack?: string | null
+  max_niveles?: number
   id_zona: Id
   codigo: string
   nivel: number
@@ -242,6 +261,8 @@ export interface RackCreate {
 
 /** PUT /racks/{id} (solo OPERARIO): estado y temperatura. Código, nivel y capacidad no se editan. */
 export interface RackUpdate {
+  tipo_rack?: string | null
+  max_niveles?: number
   estado?: EstadoRackEditable
   temperatura_min?: number | null
   temperatura_max?: number | null
@@ -252,6 +273,9 @@ export interface RackUpdate {
 /* ------------------------------------------------------------------ */
 
 export interface Producto extends Auditoria {
+  unidad?: 'kg' | 'unidad'
+  activo?: boolean
+  codigo?: string | null
   id_producto: Id
   id_empresa: Id
   /** Proveedor que lo creó (productos antiguos → null). */
@@ -275,6 +299,9 @@ export interface Producto extends Auditoria {
 
 /** peso/volumen > 0 si se envían (null permitido); lead_time_dias ≥ 0; vida_util_dias ≥ 1. */
 export interface ProductoCreate {
+  unidad?: 'kg' | 'unidad'
+  activo?: boolean
+  codigo?: string | null
   nombre: string
   categoria: string
   familia: string
@@ -292,6 +319,8 @@ export interface ProductoCreate {
 
 /** Body de PUT /productos/{id} (parcial en el backend). */
 export interface ProductoUpdate {
+  activo?: boolean
+  codigo?: string | null
   nombre: string
   categoria: string
   familia: string
@@ -306,6 +335,7 @@ export interface ProductoUpdate {
 }
 
 export interface Inventario extends Auditoria {
+  id_nivel?: string | null
   /** Identificador de la existencia por producto y rack. */
   id_detalle_inventario?: Id
   id_inventario: Id
@@ -320,6 +350,7 @@ export interface Inventario extends Auditoria {
 }
 
 export interface InventarioCreate {
+  id_nivel?: string | null
   id_almacen: Id
   id_producto: Id
   id_rack: Id
@@ -386,6 +417,7 @@ export interface OperarioUpdate {
 
 /** El backend devuelve id_producto e id_rack del inventario al momento del movimiento. */
 export interface Movimiento {
+  id_nivel?: string | null
   id_detalle_inventario?: Id
   id_movimiento: Id
   id_inventario: Id
@@ -451,6 +483,10 @@ export type ProveedorUpdate = Omit<ProveedorCreate, 'ruc' | 'password_temporal'>
 /* ------------------------------------------------------------------ */
 
 export interface OrdenReposicion extends Auditoria {
+  total_centimos?: number
+  historial_estados?: { anterior: string | null; nuevo: string; usuario: string; rol: string; fecha: string; observacion: string | null }[]
+  despachos?: Despacho[]
+  resolucion_pendiente?: { decision: string; motivo: string } | null
   id_orden_reposicion: Id
   id_empresa: Id
   id_almacen: Id
@@ -465,7 +501,7 @@ export interface OrdenReposicion extends Auditoria {
   id_operario_solicitante?: Id | null
   /** Comentario de la empresa al devolverla (OBSERVADA); se conserva tras reenviar. */
   comentario_empresa?: string | null
-  /** Lo que el proveedor dice que envió (el último despacho reemplaza al anterior). */
+  /** Último despacho del proveedor; el historial completo está en despachos. */
   despacho?: Despacho | null
   fecha_despacho?: IsoDateTime | null
 }
@@ -486,12 +522,15 @@ export interface Despacho {
 
 /** `POST /ordenes-reposicion/{id}/despacho` (PROVEEDOR, orden ENVIADA / PARCIAL). */
 export interface DespachoBody {
+  clave_idempotencia?: string
+  conformidad?: boolean
   lineas: Pick<LineaDespacho, 'id_detalle_reposicion' | 'cantidad' | 'fecha_vencimiento' | 'temperatura'>[]
   observacion: string | null
 }
 
 /** POST /ordenes-reposicion (solo OPERARIO; el almacén es el suyo). Nace PENDIENTE. */
 export interface OrdenReposicionCreate {
+  clave_idempotencia?: string
   id_proveedor: Id
   lineas?: DetalleReposicionCreate[]
   fecha_estimada_recepcion: IsoDateTime | null
@@ -507,6 +546,10 @@ export interface OrdenReposicionUpdate {
 }
 
 export interface DetalleReposicion extends Auditoria {
+  id_oferta?: string | null
+  unidad?: 'kg' | 'unidad'
+  precio_centimos?: number | null
+  subtotal_centimos?: number | null
   id_detalle_reposicion: Id
   id_orden_reposicion: Id
   id_producto: Id
@@ -515,14 +558,15 @@ export interface DetalleReposicion extends Auditoria {
 }
 
 export interface DetalleReposicionCreate {
+  id_oferta?: string
   id_producto: Id
   cantidad_solicitada: number
-  costo_unitario: number | null
+  costo_unitario?: number | null
 }
 
 export interface DetalleReposicionUpdate {
   cantidad_solicitada: number
-  costo_unitario: number | null
+  costo_unitario?: number | null
 }
 
 /* ------------------------------------------------------------------ */
@@ -537,6 +581,7 @@ export interface DetalleReposicionUpdate {
 
 /** Línea de una recepción (body de `POST /recepciones` → `detalles[]`). */
 export interface DetalleRecepcionCreate {
+  id_nivel?: string | null
   id_detalle_inventario?: Id
   id_detalle_reposicion: Id
   /** OBLIGATORIO: inventario del producto de la línea en un rack del almacén de la orden. */
@@ -589,6 +634,7 @@ export interface RecepcionMercaderia {
 }
 
 export interface RecepcionMercaderiaCreate {
+  clave_idempotencia?: string
   id_orden_reposicion: Id
   /** Opcional: si no se envía, el backend usa la fecha actual. */
   fecha_recepcion?: IsoDateTime | null

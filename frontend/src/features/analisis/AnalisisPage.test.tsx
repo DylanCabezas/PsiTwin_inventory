@@ -47,7 +47,7 @@ describe('Analysis views', () => {
       expect(container.textContent).toContain('Días a pronosticar')
       expect(container.textContent).not.toContain('Ver historial por')
       expect(container.textContent).not.toContain('Acumulado a')
-      expect(container.querySelectorAll('select')).toHaveLength(3)
+      expect(container.querySelectorAll('select')).toHaveLength(4)
     } finally {
       await act(async () => root.unmount())
       vi.unstubAllGlobals()

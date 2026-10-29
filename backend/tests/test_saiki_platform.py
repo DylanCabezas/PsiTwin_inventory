@@ -12,7 +12,7 @@ from app.services.saiki_intent_router import SaikiIntentRouter
 from app.controllers import saiki_controller
 from tests.test_google_auth import isolated_database
 
-@pytest.mark.parametrize('question', ['Hola', '¿Quién eres?', '¿Qué puedes hacer?', '¿Cómo me ayudas?', 'Gracias', 'Adiós', '¿Cómo puedo crear un producto?', '¿Cómo puedo crear un almacén?'])
+@pytest.mark.parametrize('question', ['Hola', '¿Quién eres?', '¿Qué puedes hacer?', '¿Cómo me ayudas?', 'Gracias', 'Adiós', '¿Cómo puedo crear un producto?', '¿Cómo puedo crear un almacén?', '¿Cómo activo mi micrófono?', 'Explícame la voz de Saiki', '¿Puedes usar Jorge de FreeTTS?'])
 def test_direct_and_help_do_not_query_mongo_or_model(monkeypatch, question):
     service = SaikiService()
     def forbidden(*a, **kw): pytest.fail('This question must not call databases or LLM')

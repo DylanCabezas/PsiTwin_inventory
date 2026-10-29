@@ -24,6 +24,7 @@ CASES = [
     ('¿Cuál fue la temperatura máxima de ayer en el Rack A-01?', ['máximo 9', 'mínimo 2']),
     ('¿Cómo cambió la humedad en los últimos 7 días en el Rack A-01?', ['máximo 65', '4 mediciones']),
     ('¿Cuántas alertas de sensores hubo este mes?', ['2 alertas de sensores', 'RESUELTA']),
+    ('¿Qué incidentes de sensores hubo este mes?', ['2 alertas de sensores', 'RESUELTA']),
     ('¿Qué sensores estuvieron fuera de rango este mes?', ['Temperatura alta', 'Rack A-01']),
     ('¿Cuál es la humedad del Rack A-03?', ['no es reciente', '70']),
     ('¿Qué sensores tiene el Rack VACIO?', ['No encontré sensores']),
@@ -78,6 +79,27 @@ def test_last_seven_days_has_full_rolling_window():
     now = datetime(2026, 10, 27, 17, tzinfo=timezone.utc)
     start, end = period('humedad en los últimos 7 días', now)
     assert end == now and end - start == timedelta(days=7)
+
+
+@pytest.mark.parametrize('hours', [1, 6, 24, 168])
+def test_explorer_passes_selected_period_to_sensor_query(monkeypatch, hours):
+    from app.services import saiki_sensor_queries
+    query = AsyncMock(return_value=('Lecturas verificadas', {}))
+    monkeypatch.setattr(saiki_sensor_queries, 'consultar_sensores', query)
+    response = asyncio.run(SaikiService().ask(
+        SaikiAskRequest(message='Explica el gráfico de temperatura: tendencia y umbrales',
+                        id_dispositivo='d1', sensor_horas=hours),
+        UsuarioActual(rol='EMPRESA', id_empresa='a')))
+    assert response['answer'] == 'Lecturas verificadas'
+    assert query.await_args.kwargs['horas'] == hours
+    assert query.await_args.args[2] == 'd1'
+
+
+def test_explorer_help_uses_platform_instructions():
+    response = asyncio.run(SaikiService().ask(
+        SaikiAskRequest(message='Explícame Explora tus sensores')))
+    assert response['source'] == 'knowledge'
+    assert 'Equipo, Medición y Periodo' in response['answer']
 
 
 def test_sensor_database_error_is_not_reported_as_empty_inventory(monkeypatch):

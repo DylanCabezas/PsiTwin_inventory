@@ -127,7 +127,8 @@ def test_http_permissions_filters_and_invalid_horizons(setup, monkeypatch):
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
             assert (await client.get('/api/v1/analisis/modelo')).status_code in (401, 403)
             app.dependency_overrides[get_usuario_activo] = lambda: UsuarioActual(rol='OPERARIO', id_empresa='e')
-            assert (await client.get('/api/v1/analisis/modelo')).status_code == 403
+            assert (await client.get('/api/v1/analisis/modelo')).status_code == 200
+            assert (await client.get('/api/v1/analisis/pronostico?id_almacen=foreign&id_producto=p')).status_code == 403
             app.dependency_overrides[get_usuario_activo] = lambda: user
             filters = await client.get('/api/v1/analisis/filtros')
             assert filters.json()['id_empresa'] == 'e'

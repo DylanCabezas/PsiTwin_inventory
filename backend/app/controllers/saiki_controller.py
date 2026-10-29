@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, Request
 from fastapi.routing import APIRoute
 
-from app.dependencies.dependencies import require_empresa
+from app.dependencies.dependencies import require_empresa_u_operario as require_empresa
 from app.dto.auth_dto import UsuarioActual
 from app.dto.saiki_dto import SaikiAskRequest, SaikiAskResponse
 from app.services.saiki_service import SaikiService

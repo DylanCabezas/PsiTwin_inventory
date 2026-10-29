@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from typing import Literal
 
 from pydantic import (
     BaseModel,
@@ -10,6 +11,9 @@ from pydantic import (
 
 
 class ProductoCreate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=80)
+    unidad: Literal['kg', 'unidad'] = 'unidad'
+    activo: bool = True
 
     @field_validator('nombre', 'categoria', 'familia', mode='before')
     @classmethod
@@ -110,6 +114,8 @@ class ProductoCreate(BaseModel):
 
 
 class ProductoUpdate(BaseModel):
+    codigo: str | None = Field(default=None, max_length=80)
+    activo: bool | None = None
 
     @field_validator('nombre', 'categoria', 'familia', mode='before')
     @classmethod
@@ -158,6 +164,9 @@ class ProductoUpdate(BaseModel):
 
 
 class ProductoResponse(BaseModel):
+    codigo: str | None = None
+    unidad: Literal['kg', 'unidad'] = 'unidad'
+    activo: bool = True
 
     id_producto: str
 

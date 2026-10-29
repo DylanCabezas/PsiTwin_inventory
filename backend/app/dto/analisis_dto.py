@@ -21,6 +21,8 @@ class HorizonTotal(BaseModel):
 
 
 class DemandAnalysis(BaseModel):
+    fuente_demanda: str = 'SALIDAS'
+    unidad: str | None = None
     model_config = ConfigDict(validate_assignment=True)
     estado: Literal['DISPONIBLE', 'CALCULANDO', 'SIN_HISTORIAL', 'HISTORIAL_INSUFICIENTE', 'MODELO_NO_DISPONIBLE', 'ERROR_MODELO']
     id_empresa: str

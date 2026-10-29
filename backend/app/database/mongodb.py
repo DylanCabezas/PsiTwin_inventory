@@ -70,8 +70,8 @@ async def connect_to_mongo():
         await database["inventarios"].create_index(
             [("id_inventario", 1)], unique=True, name="uq_inventario_id")
         await database["detalles_inventario"].create_index(
-            [("id_inventario", 1), ("id_producto", 1), ("id_rack", 1)],
-            unique=True, name="uq_detalle_inventario_ubicacion")
+            [("id_inventario", 1), ("id_producto", 1), ("id_rack", 1), ('id_nivel', 1)],
+            unique=True, name="uq_detalle_inventario_ubicacion_v3")
         await database["detalles_inventario"].create_index(
             [("id_detalle_inventario", 1)], unique=True, name="uq_detalle_inventario_id")
         await database["movimientos"].create_index(
@@ -91,6 +91,13 @@ async def connect_to_mongo():
             [("id_inventario", 1), ("id_producto", 1), ("id_detalle_inventario", 1), ("tipo_recomendacion", 1)],
             unique=True, partialFilterExpression={"estado": {"$in": ["PENDIENTE", "ACEPTADA"]}},
             name="uq_recomendacion_pendiente_producto_ubicacion")
+
+        await database["reportes_inventario"].create_index("id_reporte", unique=True)
+        await database["reportes_inventario"].create_index([("id_empresa",1),("actor",1),("fecha_creacion",-1)])
+        await database["ofertas_proveedor"].create_index("id_oferta", unique=True)
+        await database["ofertas_proveedor"].create_index([("id_empresa", 1), ("id_proveedor", 1), ("id_producto", 1)], unique=True)
+        await database["niveles"].create_index([("id_rack", 1), ("numero", 1)], unique=True)
+        await database["niveles"].create_index([("id_rack", 1), ("codigo", 1)], unique=True)
 
         # Verificar conexión real
         await client.admin.command(

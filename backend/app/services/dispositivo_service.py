@@ -76,6 +76,15 @@ def _aware(
 
 
 class DispositivoService:
+    @staticmethod
+    async def validar_nivel(identifier, rack_id):
+        if not identifier:
+            return
+        from app.database.mongodb import get_database
+        level = await get_database()['niveles'].find_one({'id_nivel': identifier, 'id_rack': rack_id})
+        if not level or level.get('estado', 'ACTIVO') != 'ACTIVO':
+            raise HTTPException(422, 'El nivel no pertenece al rack seleccionado')
+
 
     # ============================================================
     # RESPUESTA
@@ -217,6 +226,7 @@ class DispositivoService:
             data.id_rack
         )
 
+        await DispositivoService.validar_nivel(data.id_nivel, data.id_rack)
         token = secrets.token_urlsafe(24)
 
         ahora = datetime.now(
@@ -229,6 +239,7 @@ class DispositivoService:
             "id_almacen": data.id_almacen,
             "id_zona": data.id_zona,
             "id_rack": data.id_rack,
+            "id_nivel": data.id_nivel,
             "nombre": data.nombre.strip(),
             "activo": True,
             "token_hash": hash_token(token),
@@ -382,6 +393,11 @@ class DispositivoService:
             )
 
             cambios["id_rack"] = data.id_rack
+
+        if 'id_nivel' in enviados or 'id_rack' in enviados:
+            level_id = data.id_nivel if 'id_nivel' in enviados else actual.get('id_nivel')
+            await DispositivoService.validar_nivel(level_id, cambios.get('id_rack', actual.get('id_rack')))
+            cambios['id_nivel'] = level_id
 
         if data.limites is not None:
             cambios["limites"] = data.limites.model_dump(

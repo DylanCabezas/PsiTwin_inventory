@@ -45,7 +45,7 @@ class SaikiService:
     def __init__(self):
         from pathlib import Path
         root = Path(__file__).resolve().parents[1]
-        files = ("services/saiki_service.py", "services/saiki_tools.py", "services/saiki_inventory_summary.py", "services/saiki_intent_router.py", "services/saiki_responses.py", "dto/saiki_dto.py", "prompts/saiki_system_prompt.py", "controllers/saiki_controller.py")
+        files = ("services/saiki_service.py", "services/saiki_tools.py", "services/saiki_inventory_summary.py", "services/saiki_quantities.py", "services/saiki_intent_router.py", "services/saiki_responses.py", "dto/saiki_dto.py", "prompts/saiki_system_prompt.py", "controllers/saiki_controller.py")
         files = (*files, "services/saiki_sensors.py", "services/saiki_knowledge.py", "services/saiki_progress.py", "knowledge/psitwin.json")
         self.code_revision = hashlib.sha256(b"".join((root / name).read_bytes() for name in files)).hexdigest()[:12]
         self.settings = get_settings()
@@ -132,6 +132,31 @@ class SaikiService:
         context = dict(data.context)
         intent = intent or self.intent_router.classify(data.message or "", data.history)
         from app.services.saiki_knowledge import INTRODUCTION, help_answer
+        if user:
+            from app.services.saiki_reportes import report_answer
+            report = await report_answer(data, user)
+            if report:
+                return self._simple_response(report[0], 'backend', report[1])
+            text = self.intent_router._normalize(data.message or '')
+            from app.services.saiki_warehouse_map import respuesta_plano
+            map_answer = await respuesta_plano(data, user)
+            if map_answer:
+                return self._verified_response(map_answer[0], context, map_answer[1], {'backend'})
+            detailed = re.search(r'que productos (?:tengo|hay)|enumera.*productos.*inventario|productos.*(?:agotad|stock bajo|encima.*maxim)|que (?:hay|productos).*\b(?:aqui|zona|rack|nivel)\b|donde.*almacenad|que.*reporte.*stock', text)
+            supervision = re.search(r'(?:hay|algun|que).*problema|stock (?:bajo|agotado)|necesitan reposicion', text)
+            if re.search(r'productos.*ingres|ultima (?:entrada|salida)|ultimos movimientos', text):
+                from app.services.saiki_inventario_detallado import respuesta_movimientos
+                answer,evidence = await respuesta_movimientos(data,user)
+                return self._verified_response(answer,context,evidence,{'backend'})
+            location = any(getattr(data, k, None) for k in ('id_zona','id_rack','id_nivel')) and intent.kind in {'location','locations','inventory_detail','products'}
+            if detailed or supervision or location or re.search(r'\bpagina\s+\d+', text) and re.search(r'productos|inventario',text):
+                page_match = re.search(r'\bpagina\s+(\d+)',text)
+                if page_match and 'page' not in data.model_fields_set:
+                    data.page = max(1,min(int(page_match[1]),100000))
+                from app.services.saiki_inventario_detallado import respuesta_inventario
+                answer, evidence = await respuesta_inventario(data,user,bool(supervision))
+                return self._verified_response(answer, context, evidence, {'backend'})
+
         if intent.kind in {'identity', 'greeting'}:
             return self._simple_response(INTRODUCTION if not data.history else 'Soy Saiki Ψ, tu asistente de PsiTwin. Puedo ayudarte con inventario, almacenes, operarios, sensores y demanda. ¿Qué necesitas revisar?', 'router')
         if intent.kind == 'courtesy':
@@ -139,6 +164,51 @@ class SaikiService:
         if intent.kind == 'platform_help':
             answer, evidence = help_answer(self.intent_router._normalize(data.message))
             return self._simple_response(answer, 'knowledge', evidence)
+        if data.context.get('fuente') == 'solicitudes' and intent.kind in {'predictive', 'risk', 'demand_analysis'}:
+            warehouse = user.id_almacen if user and user.es_operario else data.id_almacen
+            if not user or not warehouse or not data.id_producto:
+                return self._clarification_response('Selecciona un almacén y un producto para explicar su pronóstico de abastecimiento.')
+            from app.services.analisis_service import service as analysis
+            await analysis.authorize(user, warehouse, data.id_producto)
+            result = await analysis.series(user, warehouse, data.id_producto, source='solicitudes')
+            answer = result.detalle or ('El pronóstico de solicitudes está disponible.' if result.estado == 'DISPONIBLE' else 'No hay historial suficiente de solicitudes para generar un pronóstico.')
+            if result.estado == 'DISPONIBLE':
+                answer += '\n' + '\n'.join(f"{h.horizonte_dias} días: {h.demanda_acumulada:g} {result.unidad or ''}" for h in result.horizontes)
+            return self._simple_response(answer, 'backend', {'analisis': result.model_dump(mode='json')})
+        if user and (intent.kind in {'stock_quantity', 'stock'} or
+                     (intent.kind == 'product_quantities' and (data.id_producto or re.search(r'\b(?:de|del)\b', data.message or '', re.I)))):
+            from app.services.saiki_quantities import quantity_answer
+            answer, evidence = await quantity_answer(data, user)
+            return self._verified_response(answer, context, evidence, {'backend'})
+        if intent.kind == 'abastecimiento' or ((data.context.get('grafico') if isinstance(data.context.get('grafico'), dict) else {}).get('tipo') == 'pedidos' and re.search(r'gr[aá]fico|historial', data.message or '', re.I)):
+            from app.services.saiki_abastecimiento import explicar_abastecimiento
+            answer, evidence = await explicar_abastecimiento(data, user)
+            return self._simple_response(answer, 'backend', evidence)
+        if user and user.es_operario and intent.kind not in {'conversation', 'courtesy'}:
+            if data.id_almacen and data.id_almacen != user.id_almacen:
+                raise HTTPException(403, 'El operario solo puede consultar su almacén')
+            if intent.kind == 'sensors' or data.id_dispositivo:
+                from app.services.saiki_sensors import sensor_report
+                answer, evidence = await sensor_report(user, data.id_dispositivo, data.sensor_horas)
+                return self._simple_response(answer, 'backend', {'sensores': evidence})
+            if intent.kind in {'predictive', 'risk', 'demand_analysis'}:
+                if not data.id_producto:
+                    return self._clarification_response('Selecciona un producto para analizar su historial o pronóstico en tu almacén.')
+                from app.services.analisis_service import service as analysis
+                await analysis.authorize(user, user.id_almacen, data.id_producto)
+                result = await analysis.series(user, user.id_almacen, data.id_producto,
+                    source='solicitudes' if data.context.get('fuente') == 'solicitudes' else 'salidas')
+                answer = result.detalle or ('El pronóstico está disponible.' if result.estado == 'DISPONIBLE' else 'No hay historial suficiente para generar un pronóstico.')
+                if result.estado == 'DISPONIBLE':
+                    answer += '\n' + '\n'.join(f"{h.horizonte_dias} días: {h.demanda_acumulada:g} {result.unidad or ''}" for h in result.horizontes)
+                return self._simple_response(answer, 'backend', {'analisis': result.model_dump(mode='json')})
+            from app.services.saiki_inventory_summary import inventory_summary
+            summary = (await inventory_summary(user))['inventory_summary']
+            rows = summary['rows']
+            if data.id_producto:
+                rows = [r for r in rows if r['id_producto'] == data.id_producto]
+            answer = '\n'.join(f"{r['product_name']}: {r['stock']} {r.get('unidad', 'unidad')} · {r.get('warehouse_name')} / {r.get('zone_name')} / {r.get('rack_name')}" for r in rows)
+            return self._simple_response(answer or 'No hay inventario autorizado para esta consulta.', 'backend', {'inventory_summary': summary})
         if intent.kind in {'workforce', 'locations'}:
             tool = 'get_workforce' if intent.kind == 'workforce' else 'get_locations'
             result, source = await self._execute_tool(tool, {}, user)
@@ -170,7 +240,8 @@ class SaikiService:
             if __import__('re').search(r'rack|ayer|semana|mes|madrugada|desconectad|alertas? activas|temperatura|humedad|corriente|ultimos? \d+ dias', self.intent_router._normalize(data.message or '')):
                 from app.services.saiki_sensor_queries import consultar_sensores
                 async with asyncio.timeout(self.settings.saiki_database_timeout_seconds):
-                    answer, evidence = await consultar_sensores(user, data.message or '', data.id_dispositivo, data.id_almacen)
+                    answer, evidence = await consultar_sensores(user, data.message or '', data.id_dispositivo, data.id_almacen,
+                        horas=data.sensor_horas if data.id_dispositivo else None)
                 return self._simple_response(answer, 'backend', {'sensores': evidence})
             from app.services.saiki_sensors import sensor_report
             answer, evidence = await sensor_report(user, data.id_dispositivo, data.sensor_horas)
@@ -382,16 +453,16 @@ class SaikiService:
             sources.add(product_source)
             stock = {row["id_producto"]: row["stock_actual"] for row in summary["stock_por_producto"]}
             rows = [{"id_producto": item["id_producto"], "product_name": item.get("nombre"),
-                     "stock": stock.get(item["id_producto"]), "has_inventory": item["id_producto"] in stock} for item in products]
+                     "stock": stock.get(item["id_producto"]), "unidad": item.get("unidad", "unidad"), "has_inventory": item["id_producto"] in stock} for item in products]
             data["product_quantities"] = rows
-            answer = "; ".join(f"{row['product_name'] or 'Producto sin nombre'}: {row['stock']} unidades" if row['has_inventory'] else f"{row['product_name'] or 'Producto sin nombre'}: sin inventario registrado" for row in rows)
+            answer = "; ".join(f"{row['product_name'] or 'Producto sin nombre'}: {row['stock']} {"unidades" if row['unidad'] == "unidad" else row['unidad']}" if row['has_inventory'] else f"{row['product_name'] or 'Producto sin nombre'}: sin inventario registrado" for row in rows)
             answer = answer + "." if answer else "No tienes productos registrados en tu catálogo."
         else:
             rows = structured["rows"]
             parts = []
             for row in rows:
                 location = ", ".join(("almacén " + (row["warehouse_name"] or "sin información"), "zona " + (row["zone_name"] or "sin información"), "rack " + (row["rack_name"] or "sin información")))
-                parts.append(f"{row['product_name'] or 'Producto sin nombre'}: {row['stock']} unidades en {location}")
+                parts.append(f"{row['product_name'] or 'Producto sin nombre'}: {row['stock']} {'unidades' if row.get('unidad', 'unidad') == 'unidad' else row['unidad']} en {location}")
             answer = "; ".join(parts) + "." if parts else "No hay ubicaciones de inventario en esta página."
             if structured["pagination"]["total_pages"] > 1:
                 answer += f" Página {request_data.page} de {structured['pagination']['total_pages']}; puedes consultar las demás páginas."
@@ -578,7 +649,8 @@ class SaikiService:
             count = result["total_almacenes"]
             answer = f"Tienes {count} {'almacén registrado' if count == 1 else 'almacenes registrados'} en PsiTwin." if count else "Actualmente no tienes almacenes registrados en PsiTwin. Te recomiendo crear tu primer almacén."
         elif kind == "stock_total":
-            answer = f"Actualmente tienes {result['stock_total_unidades']} unidades en tu inventario."
+            totals = result.get('totales_por_unidad', {'unidades': result['stock_total_unidades']})
+            answer = 'Actualmente tienes ' + ', '.join(f'{value:g} {unit}' for unit, value in totals.items()) + ' en tu inventario.'
         else:
             answer = self._natural_inventory_answer(result)
             if result.get("estado_inventario") == "stock_positivo" and "inventory_summary" in result:
@@ -586,6 +658,9 @@ class SaikiService:
                 products_label = "producto diferente" if summary['distinct_products'] == 1 else "productos diferentes"
                 warehouses_label = "almacén" if summary['warehouse_count'] == 1 else "almacenes"
                 answer = f"Actualmente tienes {summary['distinct_products']} {products_label} y {summary['total_units']} unidades distribuidas en {summary['warehouse_count']} {warehouses_label}."
+                if 'kg' in summary.get('totales_por_unidad', {}):
+                    amounts = ', '.join(f'{v:g} {u}' for u, v in summary['totales_por_unidad'].items())
+                    answer = f"Actualmente tienes {summary['distinct_products']} {products_label}: {amounts}, distribuidos en {summary['warehouse_count']} {warehouses_label}."
         payload_data = {tool: result}
         visualization = {"type": "none"}
         if "inventory_summary" in result and kind == "general":

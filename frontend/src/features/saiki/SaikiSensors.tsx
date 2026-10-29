@@ -31,11 +31,11 @@ export function SaikiSensors() {
     const open = (state: string) => ['ACTIVA', 'VISTA'].includes(state)
     return Number(b.id_alerta === selected) - Number(a.id_alerta === selected) || Number(open(b.estado)) - Number(open(a.estado)) || rank(a.nivel_riesgo) - rank(b.nivel_riesgo)
   })
-  return <Card title="Supervisión de sensores" description={available ? 'Lecturas e incidentes registrados' : 'Sin datos disponibles'}>
+  return <Card title="Supervisión de sensores" description={devices.isError || history.isError ? 'Error al consultar los sensores' : devices.isPending || history.isPending ? 'Consultando sensores…' : available ? 'Lecturas e incidentes registrados' : 'Sin lecturas actuales disponibles'}>
     {devices.isError || history.isError ? <p role="status">No se pudo consultar el historial. Intenta de nuevo.</p> : null}
     <p className="mb-3 text-sm text-fg-muted">Una alerta no confirma una avería. Contrasta las lecturas antes de diagnosticar el sensor o el equipo.</p>
     <details open={!!selected}>
-      <summary className="cursor-pointer">Historial de incidentes ({incidents.length})</summary>
+      <summary className="cursor-pointer">{history.isError ? 'Historial de incidentes no disponible' : `Historial de incidentes (${incidents.length})`}</summary>
       <div className="max-h-80 space-y-3 overflow-auto pt-3">
         {incidents.map(a => {
           const d = devices.data?.find(d => d.id_dispositivo === a.id_dispositivo)
@@ -47,7 +47,7 @@ export function SaikiSensors() {
             {a.id_dispositivo && <LinkButton size="sm" to={paths.dispositivo(a.id_dispositivo)}>Ver equipo, ubicación y lecturas</LinkButton>}
           </article>
         })}
-        {!incidents.length && <p>{history.isPending ? 'Consultando historial…' : 'No hay incidentes registrados disponibles.'}</p>}
+        {!incidents.length && !history.isError && <p>{history.isPending ? 'Consultando historial…' : 'No hay incidentes registrados disponibles.'}</p>}
       </div>
     </details>
   </Card>

@@ -40,7 +40,7 @@ export function InventariosTable({ data, caption, loading, error, onRetry, empty
   const eliminar = useDeleteInventario()
   const productoPorId = new Map((productos.data ?? []).map((p) => [p.id_producto, p]))
 
-  const { esOperario } = useRol()
+  const { esOperario, esEmpresa } = useRol()
   const [historial, setHistorial] = useState<Inventario | null>(null)
   const [movimiento, setMovimiento] = useState<Inventario | null>(null)
   const [editando, setEditando] = useState<Inventario | null>(null)
@@ -128,12 +128,12 @@ export function InventariosTable({ data, caption, loading, error, onRetry, empty
             <Button size="sm" variant="ghost" icon="clipboard" onClick={() => setHistorial(inv)} aria-label={`Historial de ${nombreProducto(inv)}`}>
               Historial
             </Button>
+            {esEmpresa && <Button size="sm" variant="ghost" icon="edit" iconOnly aria-label={`Editar límites de ${nombreProducto(inv)}`} onClick={() => setEditando(inv)} />}
             {esOperario && (
               <>
                 <Button size="sm" variant="secondary" icon="arrows" onClick={() => setMovimiento(inv)}>
                   Salida
                 </Button>
-                <Button size="sm" variant="ghost" icon="edit" iconOnly aria-label={`Editar límites de ${nombreProducto(inv)}`} onClick={() => setEditando(inv)} />
                 <Button
                   size="sm"
                   variant="ghost"

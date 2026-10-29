@@ -17,7 +17,7 @@ export interface AnalysisMetadata {
   runtime: { estado: string; validado: boolean; faltantes: string[]; detalle: string | null }
   advertencias: string[]
 }
-export interface DemandRank { id_almacen: string; id_producto: string; almacen: string; producto: string; estado: string; demanda_acumulada: number | null; stock_actual: number | null; brecha_stock: number | null }
+export interface DemandRank { unidad?: string; id_almacen: string; id_producto: string; almacen: string; producto: string; estado: string; demanda_acumulada: number | null; stock_actual: number | null; brecha_stock: number | null }
 export interface DemandSummary { horizonte_dias: number; filas: DemandRank[]; series_totales: number; series_consultadas: number; completo: boolean; calculando: boolean; advertencias: string[] }
 export interface HistoricalDemand {
   id_empresa: string; total: number; promedio_diario: number | null; dias_observados: number; documentos: number
@@ -28,6 +28,6 @@ export const analisisApi = {
   historical: (query: Record<string, string | number>) => api.get<HistoricalDemand>('/analisis/historico', { query }),
   metadata: () => api.get<AnalysisMetadata>('/analisis/modelo'),
   filters: () => api.get<{ id_empresa: string; almacenes: { id: string; nombre: string }[]; productos: { id: string; nombre: string }[] }>('/analisis/filtros'),
-  forecast: (warehouse: string, product: string) => api.get<DemandForecast>('/analisis/pronostico', { query: { id_almacen: warehouse, id_producto: product } }),
-  summary: (horizon: DemandHorizon, warehouse: string, product: string) => api.get<DemandSummary>('/analisis/resumen', { query: { horizonte_dias: horizon, ...(warehouse ? { id_almacen: warehouse } : {}), ...(product ? { id_producto: product } : {}) } }),
+  forecast: (warehouse: string, product: string, source = 'salidas') => api.get<DemandForecast>('/analisis/pronostico', { query: { id_almacen: warehouse, id_producto: product, fuente: source } }),
+  summary: (horizon: DemandHorizon, warehouse: string, product: string, source = 'salidas') => api.get<DemandSummary>('/analisis/resumen', { query: { horizonte_dias: horizon, fuente: source, ...(warehouse ? { id_almacen: warehouse } : {}), ...(product ? { id_producto: product } : {}) } }),
 }

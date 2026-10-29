@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field, field_validator
 
 from app.config.settings import settings
-from app.dependencies.dependencies import require_empresa
+from app.dependencies.dependencies import require_empresa_u_operario as require_empresa
 from app.services.local_voice_service import VOICES, voice_service
 
 router = APIRouter(prefix='/saiki/voice', tags=['Saiki voz local'], dependencies=[Depends(require_empresa)])

@@ -85,6 +85,7 @@ class DispositivoCreate(BaseModel):
     id_zona: str
 
     id_rack: Optional[str] = None
+    id_nivel: Optional[str] = None
 
     nombre: str = Field(
         ...,
@@ -105,6 +106,7 @@ class DispositivoUpdate(BaseModel):
 
     # null -> sin rack
     id_rack: Optional[str] = None
+    id_nivel: Optional[str] = None
 
     activo: Optional[bool] = None
 
@@ -156,6 +158,7 @@ class DispositivoResponse(BaseModel):
     id_zona: str
 
     id_rack: Optional[str] = None
+    id_nivel: Optional[str] = None
 
     nombre: str
 

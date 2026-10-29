@@ -1,41 +1,39 @@
 import { useEffect, useRef, useState } from 'react'
 import { intelligibleInput } from './saikiInput'
-import { type TtsOptions, type TtsProvider } from './ttsProvider'
-import { localTts, LocalRecognition, unlockLocalAudio } from './localVoice'
+import { preferredVoice, type TtsOptions, type TtsProvider } from './ttsProvider'
+import { saikiSpeech } from './saikiSpeech'
+import { LocalRecognition, unlockLocalAudio } from './localVoice'
+import { BrowserRecognition, nativeRecognitionConstructor, type Recognition } from './browserRecognition'
 
-const defaults = { voiceId: 'em_santa', rate: 1, volume: 1, enabled: false, sensorAlerts: false }
+type Engine = 'browser' | 'local'
+const defaults = { voiceId: '', rate: 1, volume: 1, enabled: true, sensorAlerts: false, sttEngine: 'local' as Engine, ttsEngine: 'browser' as Engine }
 function loadPreferences(key: string) {
   try {
     const saved = JSON.parse(localStorage.getItem(key) ?? '{}') as Partial<typeof defaults>
     return { voiceId: typeof saved.voiceId === 'string' && saved.voiceId ? saved.voiceId : defaults.voiceId,
-      rate: typeof saved.rate === 'number' ? Math.max(.5, Math.min(2, saved.rate)) : 1,
+      rate: 1,
       volume: typeof saved.volume === 'number' ? Math.max(0, Math.min(1, saved.volume)) : 1,
-      enabled: saved.enabled === true, sensorAlerts: saved.sensorAlerts === true }
+      enabled: saved.enabled !== false, sensorAlerts: saved.sensorAlerts === true,
+      sttEngine: 'local' as const,
+      ttsEngine: 'browser' as const }
   } catch { return defaults }
 }
 
-interface Recognition {
-  onprocessing?: (() => void) | null
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  onstart: (() => void) | null
-  onend: (() => void) | null
-  onerror: ((event: { error: string }) => void) | null
-  onresult: ((event: { resultIndex: number; results: { length: number; [index: number]: { isFinal: boolean; [index: number]: { transcript: string } } } }) => void) | null
-  start(): void
-  abort(): void
-}
-
 /** One opt-in voice session. Recognition never runs during a request or playback. */
-export function useSaikiVoice(onText: (text: string) => void, preferencesKey = 'psitwin.saiki.voice', tts: TtsProvider = localTts, recognitionConstructor?: new () => Recognition) {
+export function useSaikiVoice(onText: (text: string) => void, preferencesKey = 'psitwin.saiki.voice', provider?: TtsProvider, recognitionConstructor?: new () => Recognition) {
   const [preferences, setPreferences] = useState(() => loadPreferences(preferencesKey))
+  const tts = provider ?? saikiSpeech
+  const ttsRef = useRef(tts)
+  ttsRef.current = tts
   const preferenceRef = useRef(preferences)
   preferenceRef.current = preferences
+  const [runtimeEngine, setRuntimeEngine] = useState<Engine>(typeof MediaRecorder !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function' ? 'local' : 'browser')
+  const fallbackUsed = useRef(false)
   const [voices, setVoices] = useState(() => tts.voices())
   const [active, setActive] = useState(false)
   const [paused, setPaused] = useState(false)
   const [listening, setListening] = useState(false)
+  const [requesting, setRequesting] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
   const [speaking, setSpeaking] = useState(false)
   const [preparing, setPreparing] = useState(false)
@@ -50,20 +48,23 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const speechTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   const flags = useRef({ active: false, paused: false, busy: false, speaking: false, mounted: true })
-  const Constructor = recognitionConstructor ?? (typeof MediaRecorder !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function' ? LocalRecognition : undefined)
+  const Constructor = recognitionConstructor ?? (runtimeEngine === 'browser'
+    ? nativeRecognitionConstructor() ? BrowserRecognition : undefined
+    : typeof MediaRecorder !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function' ? LocalRecognition : undefined)
 
   function stopRecognition() {
     clearTimeout(timer.current)
     const r = recognition.current
     recognition.current = null
-    if (r) { r.onstart = null; r.onend = null; r.onerror = null; r.onresult = null; r.abort() }
+    if (r) { r.onlevel = null; r.onstart = null; r.onprocessing = null; r.onend = null; r.onerror = null; r.onresult = null; r.abort() }
     if (flags.current.mounted) setListening(false)
     if (flags.current.mounted) setTranscribing(false)
+    if (flags.current.mounted) setRequesting(false)
   }
   function cancelSpeech() {
     clearTimeout(speechTimer.current)
     utterance.current = null
-    tts.cancel()
+    ttsRef.current.cancel()
     flags.current.speaking = false
     if (flags.current.mounted) setSpeaking(false)
     if (flags.current.mounted) setPreparing(false)
@@ -79,16 +80,19 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
   }
   function beginRecognition() {
     if (!Constructor || !eligible() || recognition.current) return
-    const r = new Constructor()
+    const r: Recognition = new Constructor()
     recognition.current = r
-    r.lang = 'es-PE'
+    setRequesting(true)
+    r.lang = 'es-MX'
     r.continuous = true
     r.interimResults = false
-    r.onstart = () => { if (recognition.current === r) setListening(true) }
+    r.onlevel = level => { if (recognition.current === r && eligible()) setAudioLevel(level) }
+    r.onstart = () => { if (recognition.current === r) { setRequesting(false); setListening(true); setTranscribing(false) } }
     r.onprocessing = () => { if (recognition.current === r) { setListening(false); setTranscribing(true) } }
     r.onend = () => {
       if (recognition.current !== r) return
       recognition.current = null
+      setRequesting(false)
       setListening(false)
       setTranscribing(false)
       schedule() // Browsers end recognition after silence; the opt-in session stays open.
@@ -96,11 +100,34 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
     r.onerror = e => {
       if (recognition.current !== r) return
       if (e.error === 'no-speech' || e.error === 'aborted') return
+      if (!recognitionConstructor && runtimeEngine === 'browser' && !fallbackUsed.current && ['network', 'service-not-allowed', 'language-not-supported'].includes(e.error) && typeof MediaRecorder !== 'undefined' && typeof navigator.mediaDevices?.getUserMedia === 'function') {
+        fallbackUsed.current = true
+        stopRecognition()
+        setError('El reconocimiento del navegador falló; usando transcripción local.')
+        setRuntimeEngine('local')
+        return
+      }
+      if (!recognitionConstructor && runtimeEngine === 'local' && !fallbackUsed.current && nativeRecognitionConstructor() && ['local-unavailable', 'network', 'unsupported-audio', 'timeout'].includes(e.error)) {
+        fallbackUsed.current = true
+        stopRecognition()
+        setError('El transcriptor local no respondió; usando reconocimiento del navegador.')
+        setRuntimeEngine('browser')
+        return
+      }
       flags.current.paused = true
       setPaused(true)
       setError(e.error === 'not-allowed' || e.error === 'service-not-allowed'
         ? 'El micrófono no tiene permiso. Habilítalo en el navegador y pulsa Reanudar.'
-        : 'No se pudo transcribir con el motor local. Revisa su instalación o continúa por texto.')
+        : e.error === 'audio-capture' || e.error === 'device-unavailable'
+        ? 'No se pudo abrir el micrófono. Comprueba que esté conectado y disponible y pulsa Reanudar.'
+        : e.error === 'session-expired' ? 'Tu sesión expiró. Inicia sesión nuevamente para usar la voz local.'
+        : e.error === 'forbidden' ? 'Tu sesión no tiene permiso para usar la voz local.'
+        : e.error === 'busy' ? 'El motor local está ocupado. Pulsa Reanudar para intentarlo de nuevo.'
+        : e.error === 'unsupported-audio' ? 'El formato de audio no es compatible con el transcriptor local.'
+        : e.error === 'timeout' ? 'La transcripción tardó demasiado. Pulsa Reanudar o cambia el motor de reconocimiento.'
+        : e.error === 'network' ? 'No se pudo conectar al servicio de reconocimiento. Revisa la conexión o elige el motor local.'
+        : runtimeEngine === 'browser' ? 'El reconocimiento del navegador no está disponible. Puedes elegir el motor local o continuar por texto.'
+        : 'No se pudo transcribir con el motor local. Revisa el diagnóstico de voz del servidor o elige reconocimiento del navegador.')
       stopRecognition()
     }
     r.onresult = e => {
@@ -117,7 +144,7 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
       callback.current(text)
     }
     try { r.start() } catch {
-      recognition.current = null
+      stopRecognition()
       flags.current.paused = true
       setPaused(true)
       setError('El micrófono no está disponible. Pulsa Reanudar para volver a intentarlo.')
@@ -125,7 +152,9 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
   }
   function start() {
     unlockLocalAudio()
+    if (globalThis.isSecureContext === false) { setError('El micrófono requiere HTTPS o localhost.'); return }
     if (!Constructor) { setError('Este navegador no admite reconocimiento de voz. Puedes seguir por texto.'); return }
+    if (!enabled.current) toggleVoice()
     flags.current.active = true
     flags.current.paused = false
     setActive(true)
@@ -140,6 +169,7 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
     cancelSpeech()
   }
   function resume() {
+    unlockLocalAudio()
     setError('')
     flags.current.paused = false
     setPaused(false)
@@ -168,7 +198,11 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
     schedule()
   }
   function speak(text: string) {
-    if (!tts.available() || !text.trim() || flags.current.paused || !enabled.current) return
+    if (!tts.available() || !text.trim() || !enabled.current) return
+    if (tts.id === 'jorge-browser' && !tts.voices().length) {
+      setError('Jorge (México) no está disponible en este navegador. La respuesta sigue disponible por texto.')
+      return
+    }
     stopRecognition()
     cancelSpeech()
     // Prefer sentence boundaries; keep each local inference bounded.
@@ -192,18 +226,17 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
       utterance.current = u
       setSpeaking(false)
       setPreparing(true)
-      speechTimer.current = setTimeout(() => {
-        if (utterance.current === u) setError('La voz local sigue preparándose. Puedes detenerla y continuar por texto.')
-      }, 10_000)
       const fail = () => {
         if (utterance.current !== u) return
         chunks.length = 0
         utterance.current = null
+        tts.cancel()
         setError('No se pudo reproducir la voz. La respuesta sigue disponible por texto.')
         next()
       }
+      speechTimer.current = setTimeout(fail, tts.id === 'saiki-auto' || preferences.ttsEngine === 'local' ? 120_000 : 15_000)
       try { tts.speak(chunk, preferenceRef.current, {
-        start: () => { if (utterance.current === u) { clearTimeout(speechTimer.current); setError(''); setPreparing(false); setSpeaking(true); setAudioLevel(0) } },
+        start: () => { if (utterance.current === u) { clearTimeout(speechTimer.current); speechTimer.current = setTimeout(fail, 90_000); setError(''); setPreparing(false); setSpeaking(true); setAudioLevel(0) } },
         boundary: level => { if (utterance.current === u) setAudioLevel(previous => level ?? (previous > .5 ? .3 : .8)) },
         end: () => { if (utterance.current !== u) return; utterance.current = null; setAudioLevel(0); next() },
         error: fail,
@@ -211,6 +244,9 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
     }
     next()
   }
+  useEffect(() => {
+    if (eligible()) beginRecognition()
+  }, [runtimeEngine])
   useEffect(() => {
     flags.current.mounted = true
     return () => {
@@ -225,9 +261,13 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
     refresh()
     return tts.subscribe(refresh)
   }, [tts])
-  function configure(patch: Partial<TtsOptions> & { sensorAlerts?: boolean }) {
+  function configure(patch: Partial<TtsOptions> & { sensorAlerts?: boolean; sttEngine?: Engine; ttsEngine?: Engine }) {
+    if (patch.sttEngine || patch.ttsEngine) {
+      if (flags.current.active) pause()
+      else { stopRecognition(); cancelSpeech() }
+    }
     setPreferences(previous => {
-      const updated = { ...previous, ...patch }
+      const updated = { ...previous, ...(patch.ttsEngine ? { voiceId: '' } : {}), ...patch, rate: 1 }
       preferenceRef.current = updated
       try { localStorage.setItem(preferencesKey, JSON.stringify(updated)) } catch { /* memory fallback */ }
       return updated
@@ -244,8 +284,14 @@ export function useSaikiVoice(onText: (text: string) => void, preferencesKey = '
     })
     if (!enabled.current) { cancelSpeech(); schedule() }
   }
-  function finishRecording() { (recognition.current as LocalRecognition | null)?.finish?.() }
-  return { active, paused, listening, transcribing, speaking, preparing, error, voiceEnabled, toggleVoice, audioLevel, canListen: !!Constructor, canSpeak: tts.available(), voices, preferences, configure, finishRecording,
-    start, pause, resume, exit, hold, release, speak, interrupt,
+  function replay(text: string) {
+    unlockLocalAudio()
+    if (!enabled.current) toggleVoice()
+    speak(text)
+  }
+  function finishRecording() { recognition.current?.finish?.() }
+  const selectedVoice = preferredVoice(voices, provider ? preferences.voiceId : '')
+  return { active, paused, listening, requesting, transcribing, speaking, preparing, error: error || (!Constructor ? globalThis.isSecureContext === false ? 'El micrófono necesita HTTPS o localhost; esta dirección no permite capturar audio.' : 'Este navegador no ofrece captura de micrófono. Abre Saiki en Chrome o Edge actualizado.' : ''), voiceEnabled, toggleVoice, audioLevel, recognitionEngine: runtimeEngine, canListen: !!Constructor, canSpeak: tts.available(), voices, selectedVoice, preferences, configure, finishRecording,
+    start, pause, resume, exit, hold, release, speak, replay, interrupt, unlockAudio: unlockLocalAudio,
     isEnabled: () => flags.current.active && !flags.current.paused }
 }

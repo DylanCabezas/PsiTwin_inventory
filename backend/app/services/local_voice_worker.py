@@ -79,10 +79,14 @@ def run(data):
 
 if __name__ == '__main__':
     for line in sys.stdin:
+        operation = 'unknown'
         try:
             with contextlib.redirect_stdout(sys.stderr):
-                result = run(json.loads(line))
+                data = json.loads(line)
+                operation = data.get('operation') if data.get('operation') in {'transcribe', 'synthesize', 'probe'} else 'unknown'
+                result = run(data)
             print(json.dumps(result), flush=True)
         except Exception as exc:
             # Do not echo user text, audio or filesystem credentials.
-            print(json.dumps({'error': type(exc).__name__}), flush=True)
+            print(json.dumps({'error': type(exc).__name__, 'operation': operation,
+                              'dependency': exc.name if isinstance(exc, ImportError) else None}), flush=True)

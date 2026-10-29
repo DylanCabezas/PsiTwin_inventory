@@ -14,7 +14,7 @@ from fastapi import HTTPException, Request
 from app.config.settings import settings
 from app.config.paths import BACKEND_ROOT, runtime_path
 
-VOICES = {'em_santa': 'Saiki Cálido', 'em_alex': 'Saiki Natural'}
+VOICES = {'em_santa': 'Kokoro em_santa', 'em_alex': 'Kokoro em_alex'}
 
 
 class LocalVoiceService:
@@ -62,7 +62,8 @@ class LocalVoiceService:
                     # This also works on Windows SelectorEventLoop, required by aiomqtt.
                     result = await asyncio.to_thread(self.exchange, self.process, payload)
                     if 'error' in result:
-                        logging.getLogger(__name__).warning('local_voice_failed type=%s', result['error'])
+                        logging.getLogger(__name__).warning('local_voice_failed type=%s operation=%s dependency=%s',
+                            result['error'], result.get('operation'), result.get('dependency'))
                         await self.close()
                         raise HTTPException(503, 'El motor local no pudo procesar el audio. Revisa los modelos y eSpeak NG; puedes seguir por texto.')
                     return result

@@ -680,6 +680,9 @@ app.include_router(
 from app.controllers.local_voice_controller import router as local_voice_router
 app.include_router(local_voice_router, prefix=settings.api_prefix)
 
+from app.controllers.abastecimiento_controller import router as abastecimiento_router
+app.include_router(abastecimiento_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)
+
 app.include_router(analisis_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)
 
 from app.controllers.detalle_inventario_controller import router as detalle_inventario_router
@@ -703,3 +706,6 @@ app.include_router(
     monitoreo_ws_router,
     prefix=settings.api_prefix
 )
+
+from app.controllers.inventario_consulta_controller import router as inventario_consulta_router
+app.include_router(inventario_consulta_router, prefix=settings.api_prefix, dependencies=PROTEGIDO)

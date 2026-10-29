@@ -15,3 +15,6 @@ numpy
 aiomqtt
 websockets
 Pillow>=10.4
+
+openpyxl>=3.1,<4
+reportlab>=4,<5

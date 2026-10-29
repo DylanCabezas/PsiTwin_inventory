@@ -1,3 +1,4 @@
+import { WarehouseMapSelector } from '@/features/almacenes/WarehouseMap'
 /**
  * Monitoreo (EMPRESA y OPERARIO; el operario ve solo su almacén): tarjetas por dispositivo agrupadas por zona, con
  * valores en vivo (WebSocket) y color según estado (normal / fuera de rango / alerta / sin datos).
@@ -47,6 +48,7 @@ export default function MonitoreoPage() {
       />
 
       <RackMonitor />
+      <WarehouseMapSelector />
       {q.isLoading ? (
         <LoadingBlock label="Cargando dispositivos…" />
       ) : q.error ? (

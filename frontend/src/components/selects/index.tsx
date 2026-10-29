@@ -24,8 +24,16 @@ import { useZonasPorAlmacen } from '@/api/zonas'
 import type { SelectOption, SelectProps } from '@/components/ui/Select'
 import { formatNumero } from '@/lib/format'
 import { AsyncSelect } from './AsyncSelect'
+import { useQuery } from '@tanstack/react-query'
+import { abastecimientoApi } from '@/api/abastecimiento'
 
 type BaseProps = Omit<SelectProps, 'options' | 'children'>
+
+export function NivelSelect({ idRack, ...props }: BaseProps & { idRack: string | undefined }) {
+  const query = useQuery({ queryKey: ['niveles', idRack], queryFn: () => abastecimientoApi.niveles(idRack!), enabled: !!idRack })
+  return <AsyncSelect {...props} options={query.data?.map(n => ({ value: n.id_nivel, label: `Nivel ${n.numero} · ${n.codigo}` }))}
+    loading={query.isLoading} error={query.error} blockedReason={idRack ? undefined : 'Primero elige un rack'} emptyText="Este rack no tiene niveles registrados" resetKey={idRack} />
+}
 
 const porLabel = (a: SelectOption, b: SelectOption) => a.label.localeCompare(b.label, 'es')
 

@@ -59,6 +59,11 @@ export interface SaikiAskBody {
   id_producto?: string
   id_almacen?: string
   horizonte_dias?: 1 | 7 | 30 | 90
+  id_zona?: string
+  id_rack?: string
+  id_nivel?: string
+  page?: number
+  page_size?: number
   id_dispositivo?: string
   sensor_horas?: number
 }

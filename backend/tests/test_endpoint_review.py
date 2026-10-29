@@ -70,7 +70,7 @@ def test_all_requested_http_routes_with_real_jwt_and_temporary_mongo(monkeypatch
                                 break
                     return response.json() if response.content else None
 
-                product_body = {'nombre': 'Producto temporal', 'categoria': 'Alimentos', 'familia': 'Prueba', 'peso': 1, 'lead_time_dias': 2, 'vida_util_dias': 30}
+                product_body = {'nombre': 'Producto temporal', 'categoria': 'Tropicales', 'familia': 'Frutas', 'peso': 1, 'lead_time_dias': 2, 'vida_util_dias': 30}
                 product = await call('POST', '/productos', role='PROVEEDOR', status=201, json={**product_body, 'id_empresa': 'b', 'id_proveedor': 'other'})
                 p = product['id_producto']
                 assert product['id_empresa'] == 'a' and product['id_proveedor'] == 'supplier'
@@ -84,8 +84,11 @@ def test_all_requested_http_routes_with_real_jwt_and_temporary_mongo(monkeypatch
                 header = await call('POST', '/inventarios', json={'id_almacen': 'w'})
                 inventory = header['id_inventario']
                 assert (await call('POST', '/inventarios', json={'id_almacen': 'w'}))['id_inventario'] == inventory
-                detail = await call('POST', '/detalles-inventario', role='OPERARIO', status=201, json={'id_inventario': inventory, 'id_producto': p, 'id_rack': 'r', 'stock_actual': 10, 'stock_minimo': 1, 'stock_maximo': 50})
+                detail = await call('POST', '/detalles-inventario', status=201, json={'id_inventario': inventory, 'id_producto': p, 'id_rack': 'r', 'stock_actual': 0, 'stock_minimo': 1, 'stock_maximo': 50})
                 detail_id = detail['id_detalle_inventario']
+                # Seed historical stock for route coverage; receipts are exercised in the procurement HTTP integration.
+                await db.detalles_inventario.update_one({'id_detalle_inventario': detail_id}, {'$set': {'stock_actual': 10}})
+                detail['stock_actual'] = 10
                 # Real records belonging to a second tenant must never leak into lists.
                 for collection, original, replacements in [
                     ('productos', product, {'id_producto': 'foreign-p', 'id_empresa': 'b', 'id_rack': 'foreign-r', 'nombre': 'PRIVATE_OTHER_TENANT'}),
@@ -96,7 +99,8 @@ def test_all_requested_http_routes_with_real_jwt_and_temporary_mongo(monkeypatch
                     for key in ('fecha_creacion', 'fecha_actualizacion'):
                         if isinstance(record.get(key), str): record[key] = datetime.fromisoformat(record[key])
                     await db[collection].insert_one(record)
-                await call('PUT', f'/detalles-inventario/{detail_id}', role='OPERARIO', json={'stock_maximo': 40})
+                await call('PUT', f'/detalles-inventario/{detail_id}', role='OPERARIO', status=403, json={'stock_maximo': 40})
+                await call('PUT', f'/detalles-inventario/{detail_id}', json={'stock_maximo': 40})
                 await call('DELETE', f'/detalles-inventario/{detail_id}', role='OPERARIO', status=400)
                 await call('DELETE', f'/productos/{p}', role='PROVEEDOR', status=409)
                 body = {'id_inventario': inventory, 'id_detalle_inventario': detail_id, 'tipo_movimiento': 'SALIDA', 'motivo_movimiento': 'VENTA', 'cantidad': 3}
@@ -155,7 +159,7 @@ def test_all_requested_http_routes_with_real_jwt_and_temporary_mongo(monkeypatch
                 values = {'id_empresa': 'a', 'id_almacen': 'w', 'id_rack': 'r', 'id_inventario': inventory,
                           'id_detalle_inventario': detail_id, 'id_producto': p, 'id_operario': 'op',
                           'id_dispositivo': device_id, 'id_movimiento': movement['id_movimiento'],
-                          'id_item': alert_id, 'categoria': 'Alimentos', 'nivel_riesgo': 'ALTO',
+                          'id_item': alert_id, 'categoria': 'Tropicales', 'nivel_riesgo': 'ALTO',
                           'tipo_movimiento': 'SALIDA', 'motivo_movimiento': 'VENTA'}
                 for template, operations in specification.items():
                     if not targeted(template): continue
@@ -194,7 +198,7 @@ def test_all_requested_http_routes_with_real_jwt_and_temporary_mongo(monkeypatch
                 await call('POST', '/movimientos', role='OPERARIO', status=201, json={**body, 'cantidad': 7})
                 await call('DELETE', f'/detalles-inventario/{detail_id}', role='OPERARIO', status=409)
                 disposable = await call('POST', '/productos', role='PROVEEDOR', status=201, json={**product_body, 'nombre': 'Producto sin movimientos'})
-                empty = await call('POST', '/detalles-inventario', role='OPERARIO', status=201, json={'id_inventario': inventory, 'id_producto': disposable['id_producto'], 'id_rack': 'r', 'stock_actual': 0, 'stock_minimo': 0, 'stock_maximo': 50})
+                empty = await call('POST', '/detalles-inventario', role='OPERARIO', status=201, json={'id_inventario': inventory, 'id_producto': disposable['id_producto'], 'id_rack': 'r', 'stock_actual': 0, 'stock_minimo': 0, 'stock_maximo': 0})
                 await call('DELETE', f'/detalles-inventario/{empty["id_detalle_inventario"]}', role='OPERARIO')
                 await call('DELETE', f'/productos/{disposable["id_producto"]}', role='PROVEEDOR')
                 await call('DELETE', f'/dispositivos/{device_id}')

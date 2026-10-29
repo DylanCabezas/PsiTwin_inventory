@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useSession } from '@/auth/SessionContext'
 import { api, seg } from './client'
-import { norm } from './normalize'
+import { norm, requireList } from './normalize'
 import { queryKeys } from './queryKeys'
 import type { Inventario, InventarioCreate, InventarioHistorial, InventarioUpdate } from './types'
 
@@ -22,7 +22,7 @@ export const inventariosApi = {
   listSinStock: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/detalles-inventario/sin-stock')),
   listSobreStock: async (): Promise<Inventario[]> => norm.inventario.list(await api.get('/detalles-inventario/sobre-stock')),
   listByProducto: async (idProducto: string): Promise<Inventario[]> =>
-    norm.inventario.list(await api.get(`/detalles-inventario/producto/${seg(idProducto)}`)),
+    norm.inventario.list(requireList(await api.get(`/detalles-inventario/producto/${seg(idProducto)}`))),
   listByRack: async (idRack: string): Promise<Inventario[]> =>
     norm.inventario.list(await api.get(`/detalles-inventario/rack/${seg(idRack)}`)),
   get: async (id: string): Promise<Inventario> => norm.inventario.one(await api.get(`/detalles-inventario/${seg(id)}`)),

@@ -1,3 +1,5 @@
+import { ExportarInventario } from './ExportarInventario'
+import { useSaikiSessionOptional } from '@/features/saiki/SaikiSession'
 /**
  * Inventario de la empresa: stock real por producto y rack (Inventario.stock_actual).
  * Pestañas con los endpoints específicos del backend: todos / stock-bajo / sin-stock / sobre-stock.
@@ -5,7 +7,7 @@
  *
  * La pestaña se refleja en la URL (`/inventario?estado=stock-bajo|sin-stock|sobre-stock`) para poder enlazarla.
  */
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router'
 import {
   useInventarios,
@@ -54,10 +56,12 @@ export default function InventarioPage() {
   const [busqueda, setBusqueda] = useState('')
   const [idAlmacen, setIdAlmacen] = useState('')
   const [creando, setCreando] = useState(false)
+  const setInventoryContext = useSaikiSessionOptional()?.setInventoryContext
+  useEffect(() => { setInventoryContext?.({ ...(idAlmacen ? { id_almacen: idAlmacen } : {}), busqueda, estado: pestana }) }, [idAlmacen, busqueda, pestana, setInventoryContext])
 
   const ub = useUbicaciones()
   const productos = useProductos()
-  const { esOperario } = useRol()
+  const { esOperario, esEmpresa } = useRol()
   const consultas = {
     todos: useInventarios(),
     'stock-bajo': useInventariosStockBajo(),
@@ -102,10 +106,10 @@ export default function InventarioPage() {
         eyebrow="Existencias"
         description={
           esOperario
-            ? 'Stock real de cada producto por rack. El stock sube con las recepciones y baja con las salidas; aquí defines sus límites.'
-            : 'Stock real de cada producto por rack (solo lectura). Abre el historial de un inventario para ver quién lo creó o cambió.'
+            ? 'Stock real por ubicación. Las recepciones aceptadas incrementan el stock; la empresa configura sus límites.'
+            : 'Stock real por ubicación. Configura los límites y consulta el historial de movimientos.'
         }
-        {...(esOperario
+        {...((esOperario || esEmpresa)
           ? {
               actions: (
                 <Button icon="plus" onClick={() => setCreando(true)}>
@@ -116,6 +120,7 @@ export default function InventarioPage() {
           : {})}
       />
 
+      <div className="mb-4"><ExportarInventario filtros={{ ...(idAlmacen ? { id_almacen: idAlmacen } : {}), busqueda, estado: pestana }} /></div>
       <div className="mb-4 flex flex-col gap-4">
         <div role="group" aria-label="Filtrar por estado de stock" className="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1">
           {PESTANAS.map((p) => {
@@ -171,7 +176,7 @@ export default function InventarioPage() {
               icon="layers"
               title="Aún no hay inventarios"
               description="Un inventario vincula un producto con un rack y define su stock actual, mínimo y máximo. Los crea el operario del almacén."
-              {...(esOperario
+              {...((esOperario || esEmpresa)
                 ? {
                     action: (
                       <Button icon="plus" onClick={() => setCreando(true)}>
