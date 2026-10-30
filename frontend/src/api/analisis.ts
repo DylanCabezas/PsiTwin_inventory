@@ -24,7 +24,17 @@ export interface HistoricalDemand {
   fecha_inicio: string | null; fecha_fin: string | null; serie: DemandPoint[]; advertencias: string[]
   registros: { fecha: string; id_almacen: string; id_producto: string; cantidad: number; es_imputado: boolean }[]
 }
+export interface CsvColumns { columnas: string[]; muestra: Record<string, string>[]; filas: number }
+export interface CsvMapping { contenido: string; columna_fecha: string; columna_cantidad: string; columna_producto?: string; serie?: string; pronosticar?: boolean }
+export interface CsvDemandAnalysis {
+  serie: string; series: string[]; filas_archivo: number; dias_observados: number
+  fecha_inicio: string; fecha_fin: string; dias_sin_datos: number
+  total: number; promedio_diario: number; minimo_diario: number; maximo_diario: number
+  historico: DemandPoint[]; predicciones: ForecastPoint[]; estado: string; detalle: string | null; advertencias: string[]
+}
 export const analisisApi = {
+  csvColumns: (contenido: string) => api.post<CsvColumns>('/analisis/csv/columnas', { contenido }),
+  analyzeCsv: (body: CsvMapping) => api.post<CsvDemandAnalysis>('/analisis/csv/analizar', body),
   historical: (query: Record<string, string | number>) => api.get<HistoricalDemand>('/analisis/historico', { query }),
   metadata: () => api.get<AnalysisMetadata>('/analisis/modelo'),
   filters: () => api.get<{ id_empresa: string; almacenes: { id: string; nombre: string }[]; productos: { id: string; nombre: string }[] }>('/analisis/filtros'),

@@ -10,6 +10,7 @@ import { DemandChart } from './DemandChart'
 import { AnalysisDemo } from './AnalysisDemo'
 import { ForecastSeriesCard } from './ForecastSeriesCard'
 import { HistoricalDemandPanel } from './HistoricalDemandPanel'
+import { CsvDemandPanel } from './CsvDemandPanel'
 import { PedidosHistoryPanel } from '@/features/abastecimiento/PedidosHistoryPanel'
 
 const n = (v: number | null | undefined) => v == null ? '—' : v.toLocaleString('es-PE', { maximumFractionDigits: 2 })
@@ -20,7 +21,7 @@ export default function AnalisisPage() {
   const { empresa } = useEmpresa()
   const saiki = useSaikiSession()
   const navigate = useNavigate()
-  const [view, setView] = useState<'historial' | 'pronosticos' | 'pedidos'>('pedidos')
+  const [view, setView] = useState<'historial' | 'pronosticos' | 'pedidos' | 'csv'>('pedidos')
   const [warehouse, setWarehouse] = useState('')
   const [product, setProduct] = useState<string | null>(null)
   const [source, setSource] = useState('salidas')
@@ -49,18 +50,19 @@ export default function AnalisisPage() {
     </header>
     <div><Button variant={demo ? 'primary' : 'ghost'} onClick={() => setDemo(!demo)}>{demo ? 'Volver a datos de la empresa' : 'Ver gráficas con datos de ejemplo'}</Button></div>
     {demo ? <AnalysisDemo /> : <>
-    {view !== 'pedidos' && <Card><div className="grid gap-4 sm:grid-cols-3">
+    {view !== 'pedidos' && view !== 'csv' && <Card><div className="grid gap-4 sm:grid-cols-3">
       <Field label="Empresa"><p className="flex h-10 items-center text-sm">{empresa?.nombre ?? 'Empresa autenticada'}</p></Field>
       <Field label="Almacén"><Select value={selectedWarehouse} onChange={e => setWarehouse(e.target.value)} placeholder="Todos los almacenes" options={warehouses.map(w => ({ value: w.id, label: w.nombre }))} /></Field>
       <Field label="Producto"><Select value={selectedProduct} onChange={e => setProduct(e.target.value)} placeholder="Todos los productos" options={products.map(p => ({ value: p.id, label: p.nombre }))} /></Field>
     </div></Card>}
-    <div className="flex gap-3" role="group" aria-label="Vista del análisis">
+    <div className="flex flex-wrap gap-3" role="group" aria-label="Vista del análisis">
       <Button aria-pressed={view === 'pedidos'} variant={view === 'pedidos' ? 'primary' : 'ghost'} onClick={() => setView('pedidos')}>Historial de pedidos</Button>
       <Button aria-pressed={view === 'historial'} variant={view === 'historial' ? 'primary' : 'ghost'} onClick={() => setView('historial')}>Demanda registrada</Button>
       <Button aria-pressed={predicting} variant={predicting ? 'primary' : 'ghost'} onClick={() => setView('pronosticos')}>Pronósticos</Button>
+      <Button aria-pressed={view === 'csv'} variant={view === 'csv' ? 'primary' : 'ghost'} onClick={() => setView('csv')}>Analizar CSV</Button>
     </div>
-    {filters.isError && <p role="alert">No se pudieron cargar los filtros. <Button onClick={() => void filters.refetch()}>Reintentar</Button></p>}
-    {view === 'pedidos' ? <PedidosHistoryPanel /> : !predicting ? <HistoricalDemandPanel tenant={empresa?.id_empresa ?? ''} warehouse={selectedWarehouse} product={selectedProduct}
+    {view !== 'csv' && filters.isError && <p role="alert">No se pudieron cargar los filtros. <Button onClick={() => void filters.refetch()}>Reintentar</Button></p>}
+    {view === 'csv' ? <CsvDemandPanel /> : view === 'pedidos' ? <PedidosHistoryPanel /> : !predicting ? <HistoricalDemandPanel tenant={empresa?.id_empresa ?? ''} warehouse={selectedWarehouse} product={selectedProduct}
       warehouseNames={Object.fromEntries(warehouses.map(w => [w.id, w.nombre]))} productNames={Object.fromEntries(products.map(p => [p.id, p.nombre]))} /> : <>
       <Card title="Pronósticos de demanda"><div className="flex flex-wrap items-end justify-between gap-4">
         <Field label="Fuente de demanda"><Select value={source} onChange={e => setSource(e.target.value)} placeholder={false} options={[{ value: 'salidas', label: 'Salidas / CSV histórico' }, { value: 'solicitudes', label: 'Solicitudes de abastecimiento' }]} /></Field>
@@ -86,7 +88,7 @@ export default function AnalisisPage() {
         tenant={empresa?.id_empresa ?? ''} warehouse={row.id_almacen} product={row.id_producto}
         title={`${row.producto} · ${row.almacen}`} horizon={horizon} source={source} />)}
     </>}
-    {view !== 'pedidos' && <div className="flex items-center justify-between gap-4 rounded-2xl border border-violet-400/20 p-5"><p>Consulta {predicting ? 'el pronóstico' : 'el historial'} con Saiki</p><Button disabled={saiki.pending} onClick={explain}>Preguntar a Saiki</Button></div>}
+    {view !== 'pedidos' && view !== 'csv' && <div className="flex items-center justify-between gap-4 rounded-2xl border border-violet-400/20 p-5"><p>Consulta {predicting ? 'el pronóstico' : 'el historial'} con Saiki</p><Button disabled={saiki.pending} onClick={explain}>Preguntar a Saiki</Button></div>}
     </>}
   </div>
 }

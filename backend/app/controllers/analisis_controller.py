@@ -7,8 +7,20 @@ from app.dependencies.dependencies import require_empresa_u_operario as require_
 from app.dto.auth_dto import UsuarioActual
 from app.dto.analisis_dto import DemandAnalysis
 from app.services.analisis_service import service
+from app.services.demanda_csv import CsvFile, CsvAnalysisRequest, csv_columns, analyze_csv
+from starlette.concurrency import run_in_threadpool
 
 router = APIRouter(prefix='/analisis', tags=['Análisis de demanda'])
+
+
+@router.post('/csv/columnas')
+async def inspect_csv(data: CsvFile, user: UsuarioActual = Depends(require_empresa)):
+    return await run_in_threadpool(csv_columns, data.contenido)
+
+
+@router.post('/csv/analizar')
+async def csv_analysis(data: CsvAnalysisRequest, user: UsuarioActual = Depends(require_empresa)):
+    return await analyze_csv(data, user)
 
 
 @router.get('/historico')

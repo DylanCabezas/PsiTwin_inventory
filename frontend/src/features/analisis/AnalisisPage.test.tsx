@@ -26,6 +26,28 @@ function queries() {
 }
 
 describe('Analysis views', () => {
+  it('keeps the CSV view and demo alongside the recovered order history', async () => {
+    queries()
+    vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true)
+    const container = document.createElement('div')
+    const root = createRoot(container)
+    try {
+      await act(async () => root.render(<AnalisisPage />))
+      expect(container.textContent).toContain('Historial de pedidos')
+      const csv = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Analizar CSV')!
+      await act(async () => csv.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      expect(container.querySelector('input[type=file]')).not.toBeNull()
+      expect(container.textContent).toContain('No necesitas declarar tipos de datos')
+      expect(container.textContent).not.toContain('Solicitudes de abastecimiento registradas en PsiTwin.')
+      const demo = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Ver gráficas con datos de ejemplo')!
+      await act(async () => demo.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+      expect(container.textContent).toContain('Datos ficticios')
+      expect(container.querySelector('input[type=file]')).toBeNull()
+    } finally {
+      await act(async () => root.unmount())
+      vi.unstubAllGlobals()
+    }
+  })
   it('opens registered order charts without mixing dataset demand or forecasts', () => {
     queries()
     const html = renderToStaticMarkup(<AnalisisPage />)
