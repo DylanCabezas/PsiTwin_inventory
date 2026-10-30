@@ -198,6 +198,7 @@ class RecepcionMercaderiaService:
                 raise HTTPException(409,"La cantidad aceptada supera la pendiente de la orden")
 
         racks: dict = {}
+        niveles: dict = {}
 
         for detalle in data.detalles:
 
@@ -275,11 +276,12 @@ class RecepcionMercaderiaService:
                     detail=motivo
                 )
 
-            # Descontar para las siguientes líneas del mismo rack
-            racks[id_rack]["libre_kg"] -= (
-                aceptada
-                * float(producto.get("peso") or 0)
-            )
+            from app.services.nivel_service import NivelService, peso_entrada
+            nivel_id = inventario.get('id_nivel')
+            if nivel_id not in niveles:
+                niveles[nivel_id] = await NivelService.validar_ingreso(id_rack, nivel_id, producto, 0)
+            NivelService.validar_carga(niveles[nivel_id], producto, aceptada)
+            niveles[nivel_id]['libre_kg'] -= peso_entrada(producto, aceptada)
 
         recepcion = await self.repository.crear(
             data.model_dump()

@@ -289,6 +289,12 @@ class InventoryRiskService:
         result.seguridad = SeguridadInfo(stock_seguridad=safety,punto_reposicion=point)
         result.riesgo = RiesgoInfo(nivel=level,score=self._calcular_score(stock,coverage,lead,point))
         result.reposicion = self._calcular_reposicion(stock,consumption,safety,lead)
+        if result.reposicion:
+            # Legacy recommendation fields are integer quantities. Floor the
+            # available headroom so rounding cannot exceed the configured maximum.
+            headroom=max(0,math.floor(sum(d.get('stock_maximo',0) for d in details)-stock+1e-9))
+            for field in ('cantidad_minima','cantidad_recomendada','cantidad_segura'):
+                setattr(result.reposicion,field,min(getattr(result.reposicion,field),headroom))
         result.forecast.fecha_quiebre_estimada = self._calcular_fecha_quiebre(stock,forecast,base)
         result.explicacion = f"Stock agregado {stock}; forecast 7 días {weekly.demanda_total_estimada}; cobertura {coverage}; riesgo {level.value}."
         if generar_alertas:

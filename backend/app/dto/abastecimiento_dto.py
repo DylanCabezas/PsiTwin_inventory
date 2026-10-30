@@ -22,9 +22,11 @@ class OfertaRequest(BaseModel):
 class NivelRequest(BaseModel):
     codigo: str = Field(min_length=1, max_length=50)
     numero: int = Field(ge=1)
+    capacidad_kg: float = Field(gt=0, allow_inf_nan=False)
 
 
 class NivelUpdate(BaseModel):
+    capacidad_kg: float | None = Field(default=None, gt=0, allow_inf_nan=False)
     codigo: str | None = Field(default=None, min_length=1, max_length=50)
     estado: Literal['ACTIVO', 'INACTIVO', 'ARCHIVADO'] | None = None
 

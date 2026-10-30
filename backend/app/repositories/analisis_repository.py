@@ -37,12 +37,17 @@ class AnalisisRepository(SerieDemandaRepository):
                 warehouses.append({'id': w, 'nombre': f'Almacén CSV {w}', 'id_empresa': tenant})
                 known_w.add(w)
             if p not in known_p:
-                products.append({'id_producto': p, 'nombre': f"Producto CSV {row.get('producto_original') or p}", 'id_empresa': tenant})
+                operational = await db['productos'].find_one({'id_empresa': tenant, 'id_producto': p}, {'_id': 0})
+                products.append(operational or {'id_producto': p, 'nombre': f"Producto CSV {row.get('producto_original') or p}", 'id_empresa': tenant})
                 known_p.add(p)
         return warehouses, products
 
     async def dataset_history(self, tenant, warehouse, product, cutoff):
         return await DemandaHistoricaRepository().history(tenant, warehouse, product, cutoff)
+
+    async def unit_for_tenant(self, tenant, product):
+        row = await get_database()['productos'].find_one({'id_empresa': tenant, 'id_producto': product}, {'_id': 0, 'unidad': 1})
+        return row.get('unidad') if row else None
 
     async def history(self, warehouse, product, cutoff):
         first = await self.primera_salida(warehouse, product, cutoff)

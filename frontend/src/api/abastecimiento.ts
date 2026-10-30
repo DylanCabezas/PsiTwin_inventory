@@ -18,7 +18,7 @@ export interface Seguimiento {
   resolucion?: { decision: string; motivo: string } | null
 }
 export interface PedidoHistorico extends Seguimiento { cantidad: number; dia: string; id_origen: string; es_imputado: boolean }
-export interface Nivel { id_nivel: string; id_rack: string; codigo: string; numero: number }
+export interface Nivel { id_nivel: string; id_rack: string; codigo: string; numero: number; estado?: string; capacidad_kg?: number | null; carga_kg?: number; libre_kg?: number | null }
 export const abastecimientoApi = {
   catalogo: async (): Promise<Producto[]> => norm.producto.list(requireList(await api.get('/abastecimiento/catalogo'))),
   ofertas: async (disponibles = false, proveedor = '') => requireList<Oferta>(await api.get('/abastecimiento/ofertas', { query: { solo_disponibles: disponibles, id_proveedor: proveedor } })),
@@ -28,7 +28,8 @@ export const abastecimientoApi = {
   rechazar: (id: string, motivo: string) => api.patch(`/abastecimiento/solicitudes/${seg(id)}/rechazar`, { decision: 'CERRAR', motivo }),
   historial: (query: Record<string, string | boolean>) => api.get<{ registros: PedidoHistorico[]; totales_por_unidad: Record<string, number> }>('/abastecimiento/historial-pedidos', { query }),
   niveles: (rack: string) => api.get<Nivel[]>(`/abastecimiento/racks/${seg(rack)}/niveles`),
-  crearNivel: (rack: string, body: { codigo: string; numero: number }) => api.post<Nivel>(`/abastecimiento/racks/${seg(rack)}/niveles`, body),
+  crearNivel: (rack: string, body: { codigo: string; numero: number; capacidad_kg: number }) => api.post<Nivel>(`/abastecimiento/racks/${seg(rack)}/niveles`, body),
+  actualizarNivel: (id: string, body: { codigo: string; capacidad_kg: number }) => api.patch<Nivel>(`/abastecimiento/niveles/${seg(id)}`, body),
   eliminarNivel: (id: string) => api.delete(`/abastecimiento/niveles/${seg(id)}`),
 }
 export function useOfertas(disponibles = false, proveedor = '') {

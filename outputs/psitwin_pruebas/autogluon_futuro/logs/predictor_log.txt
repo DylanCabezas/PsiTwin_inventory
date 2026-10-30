@@ -1,0 +1,54 @@
+Beginning AutoGluon training...
+AutoGluon will save models to 'C:\Users\dylan\OneDrive\Escritorio\PsiTwin_inventory\outputs\psitwin_pruebas\autogluon_futuro'
+=================== System Info ===================
+AutoGluon Version:  1.6.1
+Python Version:     3.12.10
+Operating System:   Windows
+Platform Machine:   AMD64
+Platform Version:   10.0.26200
+CPU Count:          8
+Pytorch Version:    2.11.0+cpu
+CUDA Version:       CUDA is not available
+GPU Memory:         
+Total GPU Memory:   Free: 0.00 GB, Allocated: 0.00 GB, Total: 0.00 GB
+GPU Count:          0
+Memory Avail:       1.47 GB / 13.74 GB (10.7%)
+Disk Space Avail:   100.01 GB / 474.72 GB (21.1%)
+===================================================
+
+Fitting with arguments:
+{'enable_ensemble': False,
+ 'eval_metric': MAE,
+ 'freq': 'D',
+ 'hyperparameters': {'SeasonalNaive': {}},
+ 'known_covariates_names': [],
+ 'num_val_windows': 1,
+ 'prediction_length': 28,
+ 'quantile_levels': [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],
+ 'random_seed': 123,
+ 'refit_every_n_windows': 1,
+ 'refit_full': False,
+ 'skip_model_selection': False,
+ 'target': 'target',
+ 'verbosity': 2}
+
+Provided train_data has 11880 rows, 30 time series. Median time series length is 396 (min=396, max=396). 
+
+Provided data contains following columns:
+	target: 'target'
+
+AutoGluon will gauge predictive performance using evaluation metric: 'MAE'
+	This metric's sign has been flipped to adhere to being higher_is_better. The metric score can be multiplied by -1 to get the metric value.
+===================================================
+
+Starting training. Start time is 2026-10-29 23:51:31
+Models that will be trained: ['SeasonalNaive']
+Training timeseries model SeasonalNaive. 
+	-4.7212       = Validation score (-MAE)
+	0.02    s     = Training runtime
+	0.05    s     = Validation (prediction) runtime
+Training complete. Models trained: ['SeasonalNaive']
+Total runtime: 0.10 s
+Best model: SeasonalNaive
+Best model score: -4.7212
+Model not specified in predict, will default to the model with the best validation score: SeasonalNaive

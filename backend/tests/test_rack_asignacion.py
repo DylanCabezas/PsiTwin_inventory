@@ -27,8 +27,8 @@ class RackAsignacionTests(unittest.TestCase):
         assert RackService.motivo_no_cabe(RACK, YOGURT, 60) is None
 
 
-    def test_excede_kg(self):
-        assert "Capacidad insuficiente" in RackService.motivo_no_cabe(RACK, YOGURT, 120)
+    def test_rack_no_limita_kg_los_niveles_validan_la_carga(self):
+        assert RackService.motivo_no_cabe(RACK, YOGURT, 120) is None
 
 
     def test_rack_no_disponible(self):

@@ -49,6 +49,10 @@ def estado_nivel(devices, alerts, now=None):
 
 async def enriquecer_plano(db, user, racks, levels, rows, alerts):
     from app.services.dispositivo_service import DispositivoService
+    from app.services.nivel_service import NivelService
+    weighted = await NivelService.enriquecer(levels)
+    for level, current in zip(levels, weighted):
+        level.update(current)
     documents = await db['dispositivos'].find({'id_empresa': user.id_empresa,
         'id_rack': {'$in': [r.get('id_rack', r.get('id')) for r in racks]}, 'activo': True}, {'_id': 0}).to_list(length=None)
     devices = await DispositivoService.respuestas(documents)
@@ -61,6 +65,8 @@ async def enriquecer_plano(db, user, racks, levels, rows, alerts):
         level_alerts = [a for d in assigned for a in d.get('estado', {}).get('alertas_abiertas', [])]
         level_alerts += [a for a in alerts if a.get('id_nivel') == identifier and a.get('origen') == 'SENSOR']
         level['productos'] = nombres_productos(rows, identifier)
+        level['productos_asignados'] = sorted({r['producto'] for r in rows if r.get('id_nivel') == identifier
+            and r.get('ubicacion_valida') and not r.get('rechazado')}, key=str.casefold)
         level['monitoreo'] = estado_nivel(assigned, level_alerts)
         level['sensores'] = assigned
 

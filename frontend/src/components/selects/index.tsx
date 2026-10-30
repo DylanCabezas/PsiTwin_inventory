@@ -18,7 +18,7 @@ import { useOperarios } from '@/api/operarios'
 import { useProductos } from '@/api/productos'
 import { useProveedores } from '@/api/proveedores'
 import { useRacksPorZona } from '@/api/racks'
-import { etiquetaRackConNivel, useUbicaciones } from '@/api/ubicaciones'
+import { useUbicaciones } from '@/api/ubicaciones'
 import type { Producto } from '@/api/types'
 import { useZonasPorAlmacen } from '@/api/zonas'
 import type { SelectOption, SelectProps } from '@/components/ui/Select'
@@ -31,7 +31,7 @@ type BaseProps = Omit<SelectProps, 'options' | 'children'>
 
 export function NivelSelect({ idRack, ...props }: BaseProps & { idRack: string | undefined }) {
   const query = useQuery({ queryKey: ['niveles', idRack], queryFn: () => abastecimientoApi.niveles(idRack!), enabled: !!idRack })
-  return <AsyncSelect {...props} options={query.data?.map(n => ({ value: n.id_nivel, label: `Nivel ${n.numero} · ${n.codigo}` }))}
+  return <AsyncSelect {...props} options={query.data?.filter(n => !n.estado || n.estado === 'ACTIVO').sort((a, b) => a.numero - b.numero).map(n => ({ value: n.id_nivel, label: `Nivel ${n.numero} · ${n.codigo} · ${n.capacidad_kg == null ? 'Configurar carga en kg' : `${formatNumero(n.libre_kg ?? 0)} kg libres de ${formatNumero(n.capacidad_kg)} kg`}` }))}
     loading={query.isLoading} error={query.error} blockedReason={idRack ? undefined : 'Primero elige un rack'} emptyText="Este rack no tiene niveles registrados" resetKey={idRack} />
 }
 
@@ -86,7 +86,7 @@ export function RackSelect({ idZona, soloDisponibles = false, ...props }: RackSe
       const noDisponible = r.estado !== 'DISPONIBLE' && r.estado !== 'ACTIVO'
       return {
         value: r.id_rack,
-        label: `${etiquetaRackConNivel(r)} · cap. ${formatNumero(r.capacidad)}${noDisponible ? ` (${ESTADO_RACK_LABEL[r.estado] ?? r.estado})` : ''}`,
+        label: `${r.codigo} · ${r.tipo_rack || 'Tipo no definido'} · ${r.max_niveles ?? 1} niveles${noDisponible ? ` (${ESTADO_RACK_LABEL[r.estado] ?? r.estado})` : ''}`,
         disabled: soloDisponibles && noDisponible,
       }
     })

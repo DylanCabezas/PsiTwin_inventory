@@ -188,7 +188,8 @@ class DetalleInventarioService:
         await RackService.validar_asignacion(
             rack,
             producto,
-            data.stock_actual
+            data.stock_actual,
+            id_nivel=data.id_nivel
         )
 
 

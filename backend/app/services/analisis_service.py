@@ -127,6 +127,8 @@ class AnalisisService:
                               advertencias=['cantidad es demanda observada (toda SALIDA), no stock ni demanda latente.',
                                             'Se usa el historial disponible hasta el día de corte UTC; no se inventan ceros para fechas sin observación.',
                                             'Las predicciones son estimaciones sujetas a incertidumbre.'])
+        if hasattr(self.repository,'unit_for_tenant'):
+            base.unidad = await self.repository.unit_for_tenant(user.id_empresa,product)
         if hasattr(self.repository, 'received_product') and not imported and not await self.repository.received_product(warehouse, product):
             base.historico = []
             base.detalle = 'El producto aún no tiene una entrada aceptada por recepción en este almacén.'

@@ -20,7 +20,8 @@ export interface AnalysisMetadata {
 export interface DemandRank { unidad?: string; id_almacen: string; id_producto: string; almacen: string; producto: string; estado: string; demanda_acumulada: number | null; stock_actual: number | null; brecha_stock: number | null }
 export interface DemandSummary { horizonte_dias: number; filas: DemandRank[]; series_totales: number; series_consultadas: number; completo: boolean; calculando: boolean; advertencias: string[] }
 export interface HistoricalDemand {
-  id_empresa: string; total: number; promedio_diario: number | null; dias_observados: number; documentos: number
+  id_empresa: string; total: number | null; promedio_diario: number | null; dias_observados: number; documentos: number
+  unidad?: string | null; tendencia?: { promedio_primera_mitad?: number; promedio_segunda_mitad?: number }
   fecha_inicio: string | null; fecha_fin: string | null; serie: DemandPoint[]; advertencias: string[]
   registros: { fecha: string; id_almacen: string; id_producto: string; cantidad: number; es_imputado: boolean }[]
 }

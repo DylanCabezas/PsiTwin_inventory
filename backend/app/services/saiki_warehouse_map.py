@@ -6,6 +6,8 @@ from app.services.clasificacion_service import normalizar
 
 async def respuesta_plano(data, user):
     text = normalizar(data.message or '')
+    if 'donde' in text and not re.search(r'\b(?:rack|nivel|zona|plano)\b',text) and not any(getattr(data,k,None) for k in ('id_zona','id_rack','id_nivel')):
+        return None
     if not re.search(r'tipo.*rack|cuantos niveles|niveles.*vaci|donde.*(?:esta|hay|encuentr)|productos.*nivel|rack.*recient|agrego.*rack|zonas.*almacen', text):
         return None
     result = await inventario_contextual(data, user)

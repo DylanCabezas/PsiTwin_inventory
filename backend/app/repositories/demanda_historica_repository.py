@@ -60,7 +60,7 @@ class DemandaHistoricaRepository:
         midpoint = len(daily) // 2
         first = sum(r['cantidad'] for r in daily[:midpoint]) / midpoint if midpoint else None
         last = sum(r['cantidad'] for r in daily[midpoint:]) / (len(daily) - midpoint) if midpoint else None
-        return {'id_empresa': tenant, 'frecuencia': frequency, 'total': total,
+        result = {'id_empresa': tenant, 'frecuencia': frequency, 'total': total,
                 'promedio_diario': total / len(daily) if daily else None,
                 'dias_observados': len(daily), 'documentos': count, 'offset': offset, 'limite': limit,
                 'fecha_inicio': daily[0]['_id'] if daily else None,
@@ -72,3 +72,14 @@ class DemandaHistoricaRepository:
                 'registros': records,
                 'advertencias': ['Demanda del CSV, incluye observaciones marcadas es_imputado. No representa stock.',
                                  'Promedio por fechas presentes; no se agregan días ausentes. Tendencia descriptiva, no pronóstico.']}
+        catalog = await get_database()['productos'].find({'id_empresa': tenant}, {'_id': 0, 'id_producto': 1, 'unidad': 1}).to_list(length=None)
+        units = {p['id_producto']: p.get('unidad') for p in catalog}
+        used = {units.get(r['_id']['id_producto']) for r in ranking} - {None}
+        result['unidad'] = next(iter(used)) if len(used) == 1 else None
+        for row in result['ranking'] + result['ranking_productos']:
+            row['unidad'] = units.get(row['id_producto'])
+        if len(used) > 1:
+            # A scalar or curve adding kg to individual units has no physical meaning.
+            result.update(total=None, promedio_diario=None, serie=[], tendencia={})
+            result['advertencias'].append('Hay unidades diferentes: consulte un producto. No se suman kg y unidades.')
+        return result

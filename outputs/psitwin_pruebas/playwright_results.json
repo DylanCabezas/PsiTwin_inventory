@@ -1,0 +1,199 @@
+{
+  "config": {
+    "argv": [
+      "C:\\Program Files\\nodejs\\node.exe",
+      "C:\\Users\\dylan\\OneDrive\\Escritorio\\PsiTwin_inventory\\frontend\\node_modules\\@playwright\\test\\cli.js",
+      "test",
+      "--config",
+      "playwright.synthetic30.config.ts"
+    ],
+    "configFile": "C:\\Users\\dylan\\OneDrive\\Escritorio\\PsiTwin_inventory\\frontend\\playwright.synthetic30.config.ts",
+    "rootDir": "C:/Users/dylan/OneDrive/Escritorio/PsiTwin_inventory/frontend/e2e",
+    "failOnFlakyTests": false,
+    "forbidOnly": false,
+    "fullyParallel": false,
+    "globalSetup": null,
+    "globalTeardown": null,
+    "globalTimeout": 0,
+    "grep": {},
+    "grepInvert": null,
+    "maxFailures": 0,
+    "metadata": {
+      "actualWorkers": 1
+    },
+    "preserveOutput": "always",
+    "projects": [
+      {
+        "outputDir": "C:/Users/dylan/OneDrive/Escritorio/PsiTwin_inventory/outputs/psitwin_pruebas/playwright",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "id": "",
+        "name": "",
+        "testDir": "C:/Users/dylan/OneDrive/Escritorio/PsiTwin_inventory/frontend/e2e",
+        "testIgnore": [],
+        "testMatch": [
+          "synthetic30.spec.ts"
+        ],
+        "timeout": 120000
+      }
+    ],
+    "filteredProjects": [
+      {
+        "grep": {},
+        "grepInvert": null,
+        "outputDir": "C:\\Users\\dylan\\OneDrive\\Escritorio\\PsiTwin_inventory\\outputs\\psitwin_pruebas\\playwright",
+        "repeatEach": 1,
+        "retries": 0,
+        "metadata": {
+          "actualWorkers": 1
+        },
+        "name": "",
+        "testDir": "C:\\Users\\dylan\\OneDrive\\Escritorio\\PsiTwin_inventory\\frontend\\e2e",
+        "snapshotDir": "C:\\Users\\dylan\\OneDrive\\Escritorio\\PsiTwin_inventory\\frontend\\e2e",
+        "testIgnore": [],
+        "testMatch": "synthetic30.spec.ts",
+        "timeout": 120000,
+        "use": {
+          "baseURL": "http://127.0.0.1:15174",
+          "channel": "msedge",
+          "headless": true,
+          "viewport": {
+            "width": 1440,
+            "height": 1000
+          }
+        },
+        "dependencies": [],
+        "ignoreSnapshots": false,
+        "__projectId": ""
+      }
+    ],
+    "quiet": false,
+    "reporter": [
+      [
+        "list",
+        null
+      ],
+      [
+        "json",
+        {
+          "outputFile": "../outputs/psitwin_pruebas/playwright_results.json"
+        }
+      ]
+    ],
+    "reportSlowTests": {
+      "max": 5,
+      "threshold": 300000
+    },
+    "shard": null,
+    "tags": [],
+    "updateSnapshots": "default",
+    "updateSourceMethod": "patch",
+    "version": "1.64.1",
+    "workers": 1,
+    "webServer": null
+  },
+  "suites": [
+    {
+      "title": "synthetic30.spec.ts",
+      "file": "synthetic30.spec.ts",
+      "column": 0,
+      "line": 0,
+      "specs": [
+        {
+          "title": "actual React map and historical charts against imported MongoDB",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 120000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 14944,
+                  "errors": [],
+                  "stdout": [],
+                  "stderr": [],
+                  "retry": 0,
+                  "startTime": "2026-10-30T05:30:08.166Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f9391f610e63cdb8eaa-820158c04ca199067c2b",
+          "file": "synthetic30.spec.ts",
+          "line": 3,
+          "column": 1
+        },
+        {
+          "title": "existing AutoGluon runtime forecast in the real analysis page",
+          "ok": true,
+          "tags": [],
+          "tests": [
+            {
+              "timeout": 90000,
+              "annotations": [],
+              "expectedStatus": "passed",
+              "projectId": "",
+              "projectName": "",
+              "results": [
+                {
+                  "workerIndex": 0,
+                  "parallelIndex": 0,
+                  "status": "passed",
+                  "duration": 3877,
+                  "errors": [],
+                  "stdout": [
+                    {
+                      "text": "Runtime: 90 fechas correctas. Abriendo Análisis.\n"
+                    },
+                    {
+                      "text": "Papaya seleccionada. Abriendo pronósticos.\n"
+                    },
+                    {
+                      "text": "Vista de pronósticos abierta.\n"
+                    }
+                  ],
+                  "stderr": [
+                    {
+                      "text": "(node:14872) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.\n(Use `node --trace-warnings ...` to show where the warning was created)\n"
+                    }
+                  ],
+                  "retry": 0,
+                  "startTime": "2026-10-30T05:30:24.269Z",
+                  "annotations": [],
+                  "attachments": []
+                }
+              ],
+              "status": "expected"
+            }
+          ],
+          "id": "1f9391f610e63cdb8eaa-8f5280e4032e8ca0f231",
+          "file": "synthetic30.spec.ts",
+          "line": 32,
+          "column": 1
+        }
+      ]
+    }
+  ],
+  "errors": [],
+  "stats": {
+    "startTime": "2026-10-30T05:30:06.057Z",
+    "duration": 22643.146,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  }
+}

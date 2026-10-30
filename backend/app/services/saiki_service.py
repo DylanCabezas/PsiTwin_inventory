@@ -89,6 +89,21 @@ class SaikiService:
         from app.services.saiki_input import intelligible_input
         if not intelligible_input(data.message or ''):
             return self._simple_response('', 'input_filter', {'ignorado': True})
+        if user:
+            from app.services.saiki_catalog_queries import catalog_answer, resolve_forecast_product
+            resolved=await resolve_forecast_product(data,user)
+            if resolved and data.id_almacen:
+                from app.services.analisis_service import service as analysis
+                await analysis.authorize(user,data.id_almacen,data.id_producto)
+                result=await analysis.series(user,data.id_almacen,data.id_producto)
+                if result.estado=='DISPONIBLE':
+                    answer=f'Pronóstico real de AutoGluon, corte {result.fecha_corte}. Stock registrado: {result.stock_actual:g} {result.unidad}.\n'
+                    answer+='\n'.join(f'{h.horizonte_dias} días: {h.demanda_acumulada:g} {result.unidad} de demanda estimada.' for h in result.horizontes)
+                    answer+=' La demanda pronosticada no es stock disponible.'
+                else:answer=f'{result.estado}: '+(result.detalle or 'Aún no hay un resultado de predicción disponible.')
+                return self._simple_response(answer,'backend',{'analisis':result.model_dump(mode='json')})
+            catalogue=await catalog_answer(data,user)
+            if catalogue:return self._simple_response(catalogue[0],'backend',catalogue[1])
         started = time.perf_counter()
         request_id = request_id or uuid4().hex
         classified = time.perf_counter()

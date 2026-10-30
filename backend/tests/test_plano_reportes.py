@@ -19,7 +19,7 @@ from tests.test_google_auth import isolated_database
 from tests.test_abastecimiento_integral import seed
 
 async def sample(db):
-    supplier, operator, company = await seed(db)
+    supplier, operator, company = await seed(db, with_levels=False)
     await db.empresas.update_one({'id_empresa':'e'}, {'$set':{'nombre':'Empresa de prueba controlada','nombre_ceo':'Responsable de prueba','correo':'reportes@example.test','correo_verificado':True}})
     levels = await JerarquiaService.asegurar_niveles(await db.racks.find_one({'id_rack':'r'},{'_id':0}))
     await db.detalles_inventario.update_one({'id_detalle_inventario':'di'}, {'$set':{'id_nivel':levels[1]['id_nivel'],'stock_actual':10,'stock_minimo':15,'stock_maximo':20}})

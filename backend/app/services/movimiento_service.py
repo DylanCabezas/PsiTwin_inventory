@@ -376,7 +376,8 @@ class MovimientoService:
                 rack,
                 producto or {},
                 incremento,
-                exigir_disponible=(data.id_detalle_recepcion is not None)
+                exigir_disponible=(data.id_detalle_recepcion is not None),
+                id_nivel=inventario.get('id_nivel')
             )
 
         # ----------------------------------------------------

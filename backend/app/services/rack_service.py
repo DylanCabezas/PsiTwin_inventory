@@ -224,19 +224,7 @@ class RackService:
                 f"{rack.get('estado')})"
             )
 
-        carga = (
-            float(cantidad)
-            * float(producto.get("peso") or 0)
-        )
-
-        if carga > 0 and carga > rack["libre_kg"] + 1e-9:
-
-            return (
-                f"Capacidad insuficiente en el rack "
-                f"{codigo}. Libre: "
-                f"{_kg(max(rack['libre_kg'], 0))} kg. "
-                f"Carga a ingresar: {_kg(carga)} kg"
-            )
+        # La capacidad en kg se valida exclusivamente en el nivel de destino.
 
         if producto.get("requiere_refrigeracion"):
 
@@ -285,7 +273,8 @@ class RackService:
         rack: Dict[str, Any],
         producto: Dict[str, Any],
         cantidad: float,
-        exigir_disponible: bool = True
+        exigir_disponible: bool = True,
+        id_nivel: str | None = None
     ) -> Dict[str, Any]:
 
         rack = await (
@@ -307,6 +296,9 @@ class RackService:
                 status_code=409,
                 detail=motivo
             )
+
+        from app.services.nivel_service import NivelService
+        await NivelService.validar_ingreso(rack['id_rack'], id_nivel, producto, cantidad)
 
         return rack
 
@@ -729,9 +721,6 @@ class RackService:
         from app.services.stock_lock import bloqueo_rack
         async with bloqueo_rack(identifier):
             result = await self._actualizar_rack(identifier, data)
-            if data.max_niveles is not None:
-                from app.services.jerarquia_service import JerarquiaService
-                await JerarquiaService.asegurar_niveles(result)
             return result
 
     async def eliminar_rack(self, identifier):

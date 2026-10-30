@@ -1,0 +1,596 @@
+{
+  "idempotente": true,
+  "conteos_antes": {
+    "racks": 6,
+    "inventarios": 1,
+    "empresas": 1,
+    "operarios": 1,
+    "productos": 30,
+    "pedidos_sinteticos": 11880,
+    "movimientos": 13148,
+    "niveles": 10,
+    "bloqueos_stock_rack": 0,
+    "almacenes": 1,
+    "detalles_inventario": 30,
+    "demanda_historica": 11880,
+    "zonas": 3,
+    "inventario_historial": 30
+  },
+  "conteos_despues": {
+    "racks": 6,
+    "inventarios": 1,
+    "empresas": 1,
+    "operarios": 1,
+    "productos": 30,
+    "pedidos_sinteticos": 11880,
+    "movimientos": 13148,
+    "niveles": 10,
+    "bloqueos_stock_rack": 0,
+    "almacenes": 1,
+    "detalles_inventario": 30,
+    "demanda_historica": 11880,
+    "zonas": 3,
+    "inventario_historial": 30
+  },
+  "plano": {
+    "zonas": 3,
+    "racks": 6,
+    "niveles": 10,
+    "niveles_sin_datos": 10
+  },
+  "historias": [
+    {
+      "producto": "SYN-001",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 3631.06
+    },
+    {
+      "producto": "SYN-001",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 3631.06
+    },
+    {
+      "producto": "SYN-001",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 3631.06
+    },
+    {
+      "producto": "SYN-002",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 6373.87
+    },
+    {
+      "producto": "SYN-002",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 6373.87
+    },
+    {
+      "producto": "SYN-002",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 6373.87
+    },
+    {
+      "producto": "SYN-003",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 9362.69
+    },
+    {
+      "producto": "SYN-003",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 9362.69
+    },
+    {
+      "producto": "SYN-003",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 9362.69
+    },
+    {
+      "producto": "SYN-004",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 12397.89
+    },
+    {
+      "producto": "SYN-004",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 12397.89
+    },
+    {
+      "producto": "SYN-004",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 12397.89
+    },
+    {
+      "producto": "SYN-005",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 5267.29
+    },
+    {
+      "producto": "SYN-005",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 5267.29
+    },
+    {
+      "producto": "SYN-005",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 5267.29
+    },
+    {
+      "producto": "SYN-006",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 7785.42
+    },
+    {
+      "producto": "SYN-006",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 7785.42
+    },
+    {
+      "producto": "SYN-006",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 7785.42
+    },
+    {
+      "producto": "SYN-007",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 10497.62
+    },
+    {
+      "producto": "SYN-007",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 10497.62
+    },
+    {
+      "producto": "SYN-007",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 10497.62
+    },
+    {
+      "producto": "SYN-008",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 3955.57
+    },
+    {
+      "producto": "SYN-008",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 3955.57
+    },
+    {
+      "producto": "SYN-008",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 3955.57
+    },
+    {
+      "producto": "SYN-009",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 6792.77
+    },
+    {
+      "producto": "SYN-009",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 6792.77
+    },
+    {
+      "producto": "SYN-009",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 6792.77
+    },
+    {
+      "producto": "SYN-010",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 10055.05
+    },
+    {
+      "producto": "SYN-010",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 10055.05
+    },
+    {
+      "producto": "SYN-010",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 10055.05
+    },
+    {
+      "producto": "SYN-011",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 12221.84
+    },
+    {
+      "producto": "SYN-011",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 12221.84
+    },
+    {
+      "producto": "SYN-011",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 12221.84
+    },
+    {
+      "producto": "SYN-012",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 5539.29
+    },
+    {
+      "producto": "SYN-012",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 5539.29
+    },
+    {
+      "producto": "SYN-012",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 5539.29
+    },
+    {
+      "producto": "SYN-013",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 8494.72
+    },
+    {
+      "producto": "SYN-013",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 8494.72
+    },
+    {
+      "producto": "SYN-013",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 8494.72
+    },
+    {
+      "producto": "SYN-014",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 11315.37
+    },
+    {
+      "producto": "SYN-014",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 11315.37
+    },
+    {
+      "producto": "SYN-014",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 11315.37
+    },
+    {
+      "producto": "SYN-015",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 4558.54
+    },
+    {
+      "producto": "SYN-015",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 4558.54
+    },
+    {
+      "producto": "SYN-015",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 4558.54
+    },
+    {
+      "producto": "SYN-016",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 6749.39
+    },
+    {
+      "producto": "SYN-016",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 6749.39
+    },
+    {
+      "producto": "SYN-016",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 6749.39
+    },
+    {
+      "producto": "SYN-017",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 9587.12
+    },
+    {
+      "producto": "SYN-017",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 9587.12
+    },
+    {
+      "producto": "SYN-017",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 9587.12
+    },
+    {
+      "producto": "SYN-018",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 12379
+    },
+    {
+      "producto": "SYN-018",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 12379
+    },
+    {
+      "producto": "SYN-018",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 12379
+    },
+    {
+      "producto": "SYN-019",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 5804.27
+    },
+    {
+      "producto": "SYN-019",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 5804.27
+    },
+    {
+      "producto": "SYN-019",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 5804.27
+    },
+    {
+      "producto": "SYN-020",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 8797.53
+    },
+    {
+      "producto": "SYN-020",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 8797.53
+    },
+    {
+      "producto": "SYN-020",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 8797.53
+    },
+    {
+      "producto": "SYN-021",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 11003.1
+    },
+    {
+      "producto": "SYN-021",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 11003.1
+    },
+    {
+      "producto": "SYN-021",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 11003.1
+    },
+    {
+      "producto": "SYN-022",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 4549
+    },
+    {
+      "producto": "SYN-022",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 4549
+    },
+    {
+      "producto": "SYN-022",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 4549
+    },
+    {
+      "producto": "SYN-023",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 7272.53
+    },
+    {
+      "producto": "SYN-023",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 7272.53
+    },
+    {
+      "producto": "SYN-023",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 7272.53
+    },
+    {
+      "producto": "SYN-024",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 10027.57
+    },
+    {
+      "producto": "SYN-024",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 10027.57
+    },
+    {
+      "producto": "SYN-024",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 10027.57
+    },
+    {
+      "producto": "SYN-025",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 3616
+    },
+    {
+      "producto": "SYN-025",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 3616
+    },
+    {
+      "producto": "SYN-025",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 3616
+    },
+    {
+      "producto": "SYN-026",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 5941
+    },
+    {
+      "producto": "SYN-026",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 5941
+    },
+    {
+      "producto": "SYN-026",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 5941
+    },
+    {
+      "producto": "SYN-027",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 8842
+    },
+    {
+      "producto": "SYN-027",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 8842
+    },
+    {
+      "producto": "SYN-027",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 8842
+    },
+    {
+      "producto": "SYN-028",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 11483
+    },
+    {
+      "producto": "SYN-028",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 11483
+    },
+    {
+      "producto": "SYN-028",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 11483
+    },
+    {
+      "producto": "SYN-029",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 5073
+    },
+    {
+      "producto": "SYN-029",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 5073
+    },
+    {
+      "producto": "SYN-029",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 5073
+    },
+    {
+      "producto": "SYN-030",
+      "frecuencia": "diaria",
+      "puntos": 396,
+      "total": 7973
+    },
+    {
+      "producto": "SYN-030",
+      "frecuencia": "semanal",
+      "puntos": 58,
+      "total": 7973
+    },
+    {
+      "producto": "SYN-030",
+      "frecuencia": "mensual",
+      "puntos": 14,
+      "total": 7973
+    }
+  ],
+  "runtime_produccion": {
+    "estado": "DISPONIBLE",
+    "validado": true,
+    "modelo": "WeightedEnsemble",
+    "version": "1.6.1",
+    "tipo": "EVALUACION_NO_REENTRENADO",
+    "faltantes": [],
+    "detalle": "TimeSeriesPredictor.load y predict(model=WeightedEnsemble) completados sin reentrenamiento.",
+    "model_fingerprint": "c278a4e00f9ff4cc0bc052ed6a05c4998b04fc2b59f62891d2c9d80ef0a57a94",
+    "ultima_validacion": "2026-10-29T01:32:21.495834+00:00"
+  },
+  "consultas_saiki": 13,
+  "errores_saiki": 0
+}

@@ -16,7 +16,7 @@ from app.services.jerarquia_service import JerarquiaService
 from tests.test_google_auth import isolated_database
 
 
-async def seed(db):
+async def seed(db, with_levels=True):
     now = datetime.now(timezone.utc)
     await db.empresas.insert_one({'id_empresa': 'e', 'nombre': 'Prueba'})
     await db.almacenes.insert_one({'id': 'w', 'id_empresa': 'e', 'nombre': 'Almacén'})
@@ -31,6 +31,9 @@ async def seed(db):
     await db.inventarios.insert_one({'id_inventario': 'i', 'id_almacen': 'w'})
     await db.detalles_inventario.insert_one({'id_detalle_inventario': 'di', 'id_inventario': 'i', 'id_producto': 'p', 'id_rack': 'r',
         'stock_actual': 0, 'stock_minimo': 0, 'stock_maximo': 100, 'fecha_creacion': now, 'fecha_actualizacion': now})
+    if with_levels:
+        await db.niveles.insert_one({'id_nivel': 'n1', 'id_rack': 'r', 'codigo': 'N-1', 'numero': 1, 'capacidad_kg': 1000, 'estado': 'ACTIVO'})
+        await db.detalles_inventario.update_one({'id_detalle_inventario': 'di'}, {'$set': {'id_nivel': 'n1'}})
     return (UsuarioActual(rol='PROVEEDOR', id_empresa='e', id_proveedor='v'),
             UsuarioActual(rol='OPERARIO', id_empresa='e', id_almacen='w', id_operario='o'),
             UsuarioActual(rol='EMPRESA', id_empresa='e'))
@@ -99,10 +102,10 @@ def test_dispatch_receipt_updates_only_accepted_stock_and_analytics(monkeypatch,
 def test_levels_have_real_parent_limits_and_cannot_be_deleted_with_inventory(monkeypatch):
     async def run():
         async with isolated_database(monkeypatch) as db:
-            _, _, company = await seed(db)
-            levels = [await JerarquiaService.crear_nivel(company, 'r', NivelRequest(codigo=f'N{i}', numero=i)) for i in range(1, 5)]
+            _, _, company = await seed(db, with_levels=False)
+            levels = [await JerarquiaService.crear_nivel(company, 'r', NivelRequest(codigo=f'N{i}', numero=i, capacidad_kg=100)) for i in range(1, 5)]
             with pytest.raises(HTTPException):
-                await JerarquiaService.crear_nivel(company, 'r', NivelRequest(codigo='N5', numero=5))
+                await JerarquiaService.crear_nivel(company, 'r', NivelRequest(codigo='N5', numero=5, capacidad_kg=100))
             await db.detalles_inventario.update_one({'id_detalle_inventario': 'di'}, {'$set': {'id_nivel': levels[0]['id_nivel']}})
             with pytest.raises(HTTPException):
                 await JerarquiaService.eliminar_nivel(company, levels[0]['id_nivel'])
@@ -174,7 +177,7 @@ def test_migration_is_readonly_then_backed_up_idempotent_and_preserves_stock(mon
     async def run():
         from scripts.migrar_abastecimiento import plan, apply
         async with isolated_database(monkeypatch) as db:
-            await seed(db)
+            await seed(db, with_levels=False)
             await db.detalles_inventario.update_one({'id_detalle_inventario': 'di'}, {'$set': {'stock_actual': 12.5}})
             operations, levels = await plan(db)
             assert levels and operations
@@ -270,7 +273,9 @@ def test_zone_three_racks_limit_duplicate_code_and_reducing_capacity(monkeypatch
             await seed(db)
             service = RackService()
             for i in (2, 3):
-                await service.crear_rack(RackCreate(id_zona='z', codigo=f'R{i}', capacidad=100, max_niveles=4))
+                rack = await service.crear_rack(RackCreate(id_zona='z', codigo=f'R{i}', capacidad=100, max_niveles=4))
+                levels = await db.niveles.find({'id_rack': rack['id_rack']}).sort('numero', 1).to_list(length=None)
+                assert levels == []  # El rack reserva espacio; sus niveles se crean por separado.
             with pytest.raises(HTTPException):
                 await service.crear_rack(RackCreate(id_zona='z', codigo='R4', capacidad=100))
             with pytest.raises(HTTPException):

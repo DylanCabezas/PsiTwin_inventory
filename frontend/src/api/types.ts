@@ -254,7 +254,7 @@ export interface RackCreate {
   id_zona: Id
   codigo: string
   nivel: number
-  capacidad: number
+  capacidad?: number
   temperatura_min?: number | null
   temperatura_max?: number | null
 }

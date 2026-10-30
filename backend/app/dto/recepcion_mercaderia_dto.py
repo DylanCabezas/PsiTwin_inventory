@@ -56,6 +56,7 @@ class UbicarDetalleRecepcion(BaseModel):
 
 
 class ResolverEvaluacion(BaseModel):
+    id_nivel: str | None = None
 
     # OPERARIO: se fuerza al del token (puede omitirse).
     # EMPRESA: obligatorio.

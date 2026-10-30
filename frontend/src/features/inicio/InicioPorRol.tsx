@@ -7,10 +7,9 @@
 import { useNavigate } from 'react-router'
 import { useAlmacen } from '@/api/almacenes'
 import { ACCIONES_ORDEN } from '@/api/enums'
-import { useInventarios } from '@/api/inventarios'
 import { useOrdenes } from '@/api/ordenesReposicion'
 import { useRacks } from '@/api/racks'
-import type { Inventario, OrdenReposicion } from '@/api/types'
+import type { OrdenReposicion } from '@/api/types'
 import { useZonasPorAlmacen } from '@/api/zonas'
 import { useRol } from '@/auth/useRol'
 import { Badge, Card, DataTable, EmptyState, ErrorState, LinkButton, LoadingBlock, PageHeader, StatusBadge } from '@/components/ui'
@@ -33,12 +32,8 @@ function InicioOperario() {
   const almacen = useAlmacen(idAlmacen).data
   const zonasQ = useZonasPorAlmacen(idAlmacen)
   const racksQ = useRacks()
-  const invQ = useInventarios()
   const ordenesQ = useOrdenes()
 
-  const invPorRack = new Map<string, Inventario[] | undefined>()
-  if (invQ.data) for (const r of racksQ.data ?? []) invPorRack.set(r.id_rack, [])
-  for (const i of invQ.data ?? []) invPorRack.set(i.id_rack, [...(invPorRack.get(i.id_rack) ?? []), i])
 
   const ordenes = ordenesQ.data ?? []
   const porRecibir = ordenes.filter((o) => ACCIONES_ORDEN.puedeRecibir(o.estado))
@@ -120,7 +115,6 @@ function InicioOperario() {
                   ) : (
                     <RackGrilla
                       racks={racks}
-                      invPorRack={invPorRack}
                       onSelect={(r) => navigate(`${paths.zona(z.id_almacen, z.id_zona)}?rack=${encodeURIComponent(r.id_rack)}`)}
                     />
                   )}

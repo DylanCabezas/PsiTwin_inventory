@@ -82,13 +82,14 @@ class JerarquiaService:
             if len(racks) >= (zone.get('max_racks') if zone.get('max_racks') is not None else zone.get('capacidad', 0)):
                 raise HTTPException(409, 'La zona alcanzó su máximo de racks')
             result = await service._crear_rack(data)
-            await JerarquiaService.asegurar_niveles(result)
             return result
 
     @staticmethod
     async def niveles(user, rack_id):
         await AccesoService.verificar_rack(user, rack_id)
-        return await get_database()["niveles"].find({'id_rack': rack_id}, {'_id': 0}).sort('numero', 1).to_list(length=1000)
+        from app.services.nivel_service import NivelService
+        levels = await get_database()["niveles"].find({'id_rack': rack_id}, {'_id': 0}).sort('numero', 1).to_list(length=1000)
+        return await NivelService.enriquecer(levels)
 
     @staticmethod
     async def crear_nivel(user, rack_id, data):
@@ -102,6 +103,7 @@ class JerarquiaService:
             if not code or any(r['codigo'] == code or r['numero'] == data.numero for r in rows):
                 raise HTTPException(409, 'Código o número de nivel duplicado')
             row = {'id_nivel': str(uuid4()), 'id_rack': rack_id, 'codigo': code, 'numero': data.numero,
+                   'capacidad_kg': data.capacidad_kg,
                    'id_empresa': user.id_empresa, 'fecha_creacion': datetime.now(timezone.utc)}
             await get_database()["niveles"].insert_one(row)
             row.pop('_id', None)
@@ -116,6 +118,11 @@ class JerarquiaService:
         await AccesoService.verificar_rack(user, level['id_rack'])
         async with bloqueo_recurso('rack:' + level['id_rack']):
             changes = data.model_dump(exclude_none=True)
+            if 'capacidad_kg' in changes:
+                from app.services.nivel_service import NivelService
+                current = (await NivelService.enriquecer([level]))[0]
+                if changes['capacidad_kg'] < current['carga_kg']:
+                    raise HTTPException(409, 'La capacidad del nivel no puede ser menor que su carga actual')
             if 'codigo' in changes:
                 changes['codigo'] = changes['codigo'].strip().upper()
                 duplicate = await db['niveles'].find_one({'id_rack': level['id_rack'], 'codigo': changes['codigo'], 'id_nivel': {'$ne': identifier}})

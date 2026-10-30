@@ -77,6 +77,7 @@ const lineaSchema = z
     const hayRechazo = l.estado_recepcion === 'CONFORME' && rech > 0
     if (l.estado_recepcion === 'CONFORME' && (!Number.isFinite(rech) || rech < 0 || rech > cant)) issue('cantidad_rechazada', 'Entero entre 0 y lo recibido')
     if (!l.id_rack) issue('id_rack', 'Elige el rack de destino')
+    if (!l.id_nivel) issue('id_nivel', 'Elige un nivel del rack de destino')
     const t = l.temperatura_recepcion.trim()
     if (t !== '' && !Number.isFinite(num(t))) issue('temperatura_recepcion', 'Número no válido')
     if ((l.estado_recepcion !== 'CONFORME' || hayRechazo) && l.comentario_recepcion.trim() === '') {
@@ -477,14 +478,13 @@ function LineaFila({
   const cargandoRacks = (racksQ.isLoading && !racksQ.data) || invsQ.isLoading
   const errorRacks = racksQ.data ? null : (racksQ.error ?? invsQ.error)
   const invEn = (idR: string) => (invsQ.data ?? []).find((i) => i.id_rack === idR && i.id_producto === linea.detalle.id_producto)
-  const racks = [...(racksQ.data ?? [])].sort((a, b) => Number(!!invEn(b.id_rack)) - Number(!!invEn(a.id_rack)) || b.libre_kg - a.libre_kg)
-  const kg = unidades * (producto?.peso ?? 0)
+  const racks = [...(racksQ.data ?? [])].sort((a, b) => Number(!!invEn(b.id_rack)) - Number(!!invEn(a.id_rack)) || a.codigo.localeCompare(b.codigo, 'es', { numeric: true }))
   const opcionesRack = racks.filter(r => !zonaFiltro || r.id_zona === zonaFiltro).map((r) => {
     const inv = invEn(r.id_rack)
     const temp = temperaturaRack(r)
     return {
       value: r.id_rack,
-      label: `${r.codigo} · ${r.nombre_zona ?? 'Zona'} · ${r.max_niveles ?? 1} niveles · ${formatNumero(r.libre_kg)} kg libres${temp ? ` · ${temp}` : ''}${inv ? ` · ya tiene este producto (stock ${formatNumero(inv.stock_actual)})` : ''}`,
+      label: `${r.codigo} · ${r.nombre_zona ?? 'Zona'} · ${r.tipo_rack || 'Tipo no definido'} · ${r.max_niveles ?? 1} niveles${temp ? ` · ${temp}` : ''}${inv ? ` · ya tiene este producto (stock ${formatNumero(inv.stock_actual)})` : ''}`,
     }
   })
   const rackSel = racks.find((r) => r.id_rack === idRack)
@@ -572,7 +572,7 @@ function LineaFila({
                 ? 'Mercadería rechazada: no ingresa stock, pero el registro necesita una ubicación de referencia.'
                 : estado === 'EN_EVALUACION'
                   ? `Ingresará aquí cuando se resuelva la evaluación (${formatNumero(unidades)} u.).`
-                  : `Racks libres que soportan ${formatNumero(kg)} kg (${formatNumero(unidades)} u.)${producto?.requiere_refrigeracion ? ' y cumplen su temperatura' : ''}.`
+                  : 'Elige el rack por su tipo y luego el nivel de destino. La capacidad en kg se valida en ese nivel.'
             }
           >
             {cargandoRacks ? (
@@ -580,7 +580,7 @@ function LineaFila({
             ) : errorRacks ? (
               <Select size="lg" disabled placeholder={errorRacks instanceof ApiError ? `Error: ${errorRacks.detail}` : 'Error al cargar los racks'} />
             ) : opcionesRack.length === 0 ? (
-              <Select size="lg" disabled placeholder={`Ningún rack libre soporta ${formatNumero(kg)} kg${producto?.requiere_refrigeracion ? ' con la temperatura del producto' : ''}`} />
+              <Select size="lg" disabled placeholder="No hay racks disponibles para este producto" />
             ) : (
               <Controller
                 control={control}
@@ -603,7 +603,7 @@ function LineaFila({
               />
             )}
           </Field>
-          <Field label="Nivel de destino"><NivelSelect idRack={idRack || undefined} {...register(`${pref}.id_nivel`)} /></Field>
+          <Field label="Nivel de destino" required error={errores?.id_nivel?.message}><NivelSelect idRack={idRack || undefined} {...register(`${pref}.id_nivel`)} /></Field>
           {crearInventario && (
             <>
               <p className="flex items-start gap-2 text-sm text-fg-muted sm:col-span-2 lg:col-span-1">

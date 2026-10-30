@@ -5,9 +5,6 @@ import { WarehouseMap } from './WarehouseMap'
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams } from 'react-router'
 import { usePlano } from '@/api/inventarioConsultas'
-import { inventarioConsultasApi } from '@/api/inventarioConsultas'
-import { useMutation } from '@tanstack/react-query'
-import { useRol } from '@/auth/useRol'
 import { Button, Card, PageHeader, LinkButton } from '@/components/ui'
 import { useSaikiSessionOptional } from '@/features/saiki/SaikiSession'
 import { paths } from '@/paths'
@@ -15,8 +12,6 @@ import { paths } from '@/paths'
 export default function PlanoAlmacenPage() {
   const { idAlmacen = '' } = useParams()
   const query = usePlano(idAlmacen)
-  const { esEmpresa } = useRol()
-  const enableLevels = useMutation({ mutationFn: inventarioConsultasApi.habilitar, onSuccess: () => { void query.refetch() } })
   const [params] = useSearchParams()
   const [zone, setZone] = useState(params.get('zona') ?? ''), [rack, setRack] = useState(params.get('rack') ?? ''), [level, setLevel] = useState(params.get('nivel') ?? '')
   const movements = useMovimientosPorRack(rack || undefined)
@@ -38,9 +33,7 @@ export default function PlanoAlmacenPage() {
     <div className="flex flex-wrap gap-2"><Button variant="secondary" onClick={() => { setZone(''); setRack(''); setLevel('') }}>Ver todo el almacén</Button><Button variant="ghost" onClick={() => void query.refetch()}>Actualizar plano</Button><LinkButton to={paths.saiki}>Preguntar a Saiki sobre esta ubicación</LinkButton></div>
     <WarehouseMap data={data} onSelect={(z,r,n) => { setZone(z); setRack(r); setLevel(n) }} />
     {selected && <div className="flex flex-wrap gap-2">
-      <LinkButton to={paths.zona(idAlmacen, selected.id_zona)}>Configurar rack y tipo</LinkButton>
-      {esEmpresa && levels.length !== selected.max_niveles && <Button loading={enableLevels.isPending} onClick={() => enableLevels.mutate(selected.id_rack)}>Habilitar niveles configurados</Button>}
-      {enableLevels.isError && <p role="alert">No se pudieron habilitar los niveles.</p>}
+      <LinkButton to={paths.zona(idAlmacen, selected.id_zona) + '?rack=' + encodeURIComponent(selected.id_rack)}>Crear y configurar niveles del rack</LinkButton>
     </div>}
     <Card title="Inventario de la ubicación seleccionada">
       <p className="mb-3 text-sm text-fg-muted">{data.almacen.nombre} / {data.zonas.find(z => (z.id_zona ?? z.id) === zone)?.nombre ?? 'Todas las zonas'} / {selected?.codigo ?? 'Todos los racks'} / {levels.find(n => n.id_nivel === level)?.codigo ?? 'Todos los niveles'}</p>

@@ -14,7 +14,8 @@ import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { useCreateInventario, useInventariosPorProducto, useUpdateInventario } from '@/api/inventarios'
 import { useProducto } from '@/api/productos'
-import { useRack } from '@/api/racks'
+import { useQuery } from '@tanstack/react-query'
+import { abastecimientoApi } from '@/api/abastecimiento'
 import { useZona } from '@/api/zonas'
 import type { Inventario, InventarioCreate, InventarioUpdate } from '@/api/types'
 import { useUbicaciones } from '@/api/ubicaciones'
@@ -43,7 +44,7 @@ const crearSchema = z
     id_almacen: idRequerido('Selecciona un almacén'),
     id_zona: idRequerido('Selecciona una zona'),
     id_rack: idRequerido('Selecciona un rack'),
-    id_nivel: z.string(),
+    id_nivel: idRequerido('Selecciona un nivel del rack'),
     stock_actual: numero({ min: 0 }),
     stock_minimo: numero({ min: 0 }),
     stock_maximo: numero({ min: 0 }),
@@ -95,11 +96,12 @@ function CrearInner({ productoFijo, onSuccess, onCancel, defaults }: InventarioC
   const form = useForm<CrearIn, unknown, CrearOut>({ resolver: zodResolver(crearSchema), defaultValues: defaults })
   const { register, handleSubmit, setValue, formState, control, setError } = form
   const err = formState.errors
-  const [idProducto, idAlmacen, idZona, idRack] = useWatch({ control, name: ['id_producto', 'id_almacen', 'id_zona', 'id_rack'] })
+  const [idProducto, idAlmacen, idZona, idRack, idNivel] = useWatch({ control, name: ['id_producto', 'id_almacen', 'id_zona', 'id_rack', 'id_nivel'] })
   const existentes = useInventariosPorProducto(idProducto || undefined)
   const producto = useProducto(idProducto || undefined)
   const zona = useZona(idZona || undefined).data
-  const rack = useRack(idRack || undefined).data
+  const niveles = useQuery({ queryKey: ['niveles', idRack], queryFn: () => abastecimientoApi.niveles(idRack), enabled: !!idRack })
+  const nivel = niveles.data?.find(n => n.id_nivel === idNivel)
   const p = producto.data
 
   const submit = handleSubmit(async ({ id_almacen: _a, id_zona: _z, ...values }) => {
@@ -113,10 +115,14 @@ function CrearInner({ productoFijo, onSuccess, onCancel, defaults }: InventarioC
       setError('id_zona', { message: 'El producto requiere refrigeración y esta zona no es refrigerada' }, { shouldFocus: true })
       return
     }
-    const libre = rack ? rack.libre_kg : null
-    const carga = values.stock_actual * (p?.peso ?? 0)
-    if (libre !== null && carga > libre) {
-      setError('stock_actual', { message: `Pesa ${formatNumero(carga)} kg y el rack solo soporta ${formatNumero(libre)} kg más` }, { shouldFocus: true })
+    const libre = nivel?.libre_kg
+    const carga = values.stock_actual * (p?.unidad === 'kg' ? 1 : p?.peso ?? 0)
+    if (values.stock_actual > 0 && nivel?.capacidad_kg == null) {
+      setError('id_nivel', { message: 'Configura primero la carga máxima en kg del nivel' }, { shouldFocus: true })
+      return
+    }
+    if (libre != null && carga > libre) {
+      setError('stock_actual', { message: `Pesa ${formatNumero(carga)} kg y el nivel solo soporta ${formatNumero(libre)} kg más` }, { shouldFocus: true })
       return
     }
     const body: InventarioCreate = { ...values, id_nivel: values.id_nivel || null, id_almacen: idAlmacen }
@@ -132,7 +138,6 @@ function CrearInner({ productoFijo, onSuccess, onCancel, defaults }: InventarioC
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-5">
       <ApiErrorAlert error={apiError.error} />
-      <Field label="Nivel de destino"><NivelSelect idRack={idRack || undefined} {...register('id_nivel')} /></Field>
 
       {productoFijo ? (
         <div className="rounded-md border border-border bg-surface-2/60 px-4 py-3">
@@ -171,6 +176,7 @@ function CrearInner({ productoFijo, onSuccess, onCancel, defaults }: InventarioC
         }}
         errores={{ almacen: err.id_almacen?.message, zona: err.id_zona?.message, rack: err.id_rack?.message }}
       />
+      <Field label="Nivel de destino" required error={err.id_nivel?.message}><NivelSelect idRack={idRack || undefined} {...register('id_nivel')} /></Field>
 
       <div className="grid gap-4 sm:grid-cols-3">
         <Field label="Stock inicial" error={err.stock_actual?.message} required hint="No puede superar el stock máximo.">

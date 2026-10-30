@@ -1,0 +1,669 @@
+{
+  "id_empresa": "psitwin-synthetic-30-v1",
+  "id_almacen": "dff01e69-9219-495d-a94a-97df4dea6b5b",
+  "id_inventario": "779ea5d3-df0b-49f1-892f-58309f6c2ecf",
+  "id_producto": "1f705e03-0afc-48fb-aff3-3fb42a900cc3",
+  "stock_actual": 0.0,
+  "consumo": {
+    "promedio_7d": 9.29,
+    "promedio_14d": 9.05,
+    "promedio_28d": 9.27,
+    "tendencia_porcentaje": 0.15
+  },
+  "cobertura": {
+    "dias": 0.0
+  },
+  "lead_time_dias": 3,
+  "forecast": {
+    "demanda_7d": 68.3457,
+    "fecha_quiebre_estimada": "2026-10-28T00:00:00Z",
+    "predicciones_diarias": [
+      {
+        "fecha": "2026-10-29T00:00:00Z",
+        "demanda_predicha": 9.011990119504095
+      },
+      {
+        "fecha": "2026-10-30T00:00:00Z",
+        "demanda_predicha": 9.024783201869536
+      },
+      {
+        "fecha": "2026-10-31T00:00:00Z",
+        "demanda_predicha": 11.81951169610112
+      },
+      {
+        "fecha": "2026-11-01T00:00:00Z",
+        "demanda_predicha": 11.498898403783402
+      },
+      {
+        "fecha": "2026-11-02T00:00:00Z",
+        "demanda_predicha": 8.989140646647083
+      },
+      {
+        "fecha": "2026-11-03T00:00:00Z",
+        "demanda_predicha": 9.005683688124506
+      },
+      {
+        "fecha": "2026-11-04T00:00:00Z",
+        "demanda_predicha": 8.995651958885432
+      }
+    ]
+  },
+  "seguridad": {
+    "stock_seguridad": 7.91,
+    "punto_reposicion": 37.2
+  },
+  "riesgo": {
+    "nivel": "CRITICO",
+    "score": 100.0
+  },
+  "reposicion": {
+    "cantidad_minima": 81,
+    "cantidad_recomendada": 81,
+    "cantidad_segura": 81
+  },
+  "explicacion": "Stock agregado 0.0; forecast 7 días 68.3457; cobertura 0.0; riesgo CRITICO.",
+  "estado": "DISPONIBLE",
+  "advertencias": [
+    "Demanda histórica del CSV; cantidad no representa stock. Incluye registros marcados es_imputado.",
+    "No se completan fechas ausentes. El corte corresponde al último día importado anterior a hoy UTC.",
+    "El pronóstico usa exclusivamente AutoGluon y corresponde a las fechas posteriores al corte del dataset."
+  ],
+  "pronosticos": {
+    "1": {
+      "id_almacen": "dff01e69-9219-495d-a94a-97df4dea6b5b",
+      "id_producto": "1f705e03-0afc-48fb-aff3-3fb42a900cc3",
+      "fecha_generacion": "2026-10-30T05:27:12.075279Z",
+      "fecha_corte": "2026-10-28",
+      "horizonte_dias": 1,
+      "fecha_inicio": "2026-10-29",
+      "fecha_fin": "2026-10-29",
+      "estado": "DISPONIBLE",
+      "demanda_total_estimada": 9.012,
+      "predicciones_diarias": [
+        {
+          "fecha": "2026-10-29",
+          "demanda_estimada": 9.011990119504095
+        }
+      ],
+      "modelo": "AutoGluon",
+      "version_modelo": "1.6.1",
+      "historial_suficiente": true,
+      "advertencias": [
+        "Demanda histórica del CSV; cantidad no representa stock. Incluye registros marcados es_imputado.",
+        "No se completan fechas ausentes. El corte corresponde al último día importado anterior a hoy UTC.",
+        "El pronóstico usa exclusivamente AutoGluon y corresponde a las fechas posteriores al corte del dataset."
+      ]
+    },
+    "7": {
+      "id_almacen": "dff01e69-9219-495d-a94a-97df4dea6b5b",
+      "id_producto": "1f705e03-0afc-48fb-aff3-3fb42a900cc3",
+      "fecha_generacion": "2026-10-30T05:27:12.222923Z",
+      "fecha_corte": "2026-10-28",
+      "horizonte_dias": 7,
+      "fecha_inicio": "2026-10-29",
+      "fecha_fin": "2026-11-04",
+      "estado": "DISPONIBLE",
+      "demanda_total_estimada": 68.3457,
+      "predicciones_diarias": [
+        {
+          "fecha": "2026-10-29",
+          "demanda_estimada": 9.011990119504095
+        },
+        {
+          "fecha": "2026-10-30",
+          "demanda_estimada": 9.024783201869536
+        },
+        {
+          "fecha": "2026-10-31",
+          "demanda_estimada": 11.81951169610112
+        },
+        {
+          "fecha": "2026-11-01",
+          "demanda_estimada": 11.498898403783402
+        },
+        {
+          "fecha": "2026-11-02",
+          "demanda_estimada": 8.989140646647083
+        },
+        {
+          "fecha": "2026-11-03",
+          "demanda_estimada": 9.005683688124506
+        },
+        {
+          "fecha": "2026-11-04",
+          "demanda_estimada": 8.995651958885432
+        }
+      ],
+      "modelo": "AutoGluon",
+      "version_modelo": "1.6.1",
+      "historial_suficiente": true,
+      "advertencias": [
+        "Demanda histórica del CSV; cantidad no representa stock. Incluye registros marcados es_imputado.",
+        "No se completan fechas ausentes. El corte corresponde al último día importado anterior a hoy UTC.",
+        "El pronóstico usa exclusivamente AutoGluon y corresponde a las fechas posteriores al corte del dataset."
+      ]
+    },
+    "30": {
+      "id_almacen": "dff01e69-9219-495d-a94a-97df4dea6b5b",
+      "id_producto": "1f705e03-0afc-48fb-aff3-3fb42a900cc3",
+      "fecha_generacion": "2026-10-30T05:27:12.401486Z",
+      "fecha_corte": "2026-10-28",
+      "horizonte_dias": 30,
+      "fecha_inicio": "2026-10-29",
+      "fecha_fin": "2026-11-27",
+      "estado": "DISPONIBLE",
+      "demanda_total_estimada": 299.6376,
+      "predicciones_diarias": [
+        {
+          "fecha": "2026-10-29",
+          "demanda_estimada": 9.011990119504095
+        },
+        {
+          "fecha": "2026-10-30",
+          "demanda_estimada": 9.024783201869536
+        },
+        {
+          "fecha": "2026-10-31",
+          "demanda_estimada": 11.81951169610112
+        },
+        {
+          "fecha": "2026-11-01",
+          "demanda_estimada": 11.498898403783402
+        },
+        {
+          "fecha": "2026-11-02",
+          "demanda_estimada": 8.989140646647083
+        },
+        {
+          "fecha": "2026-11-03",
+          "demanda_estimada": 9.005683688124506
+        },
+        {
+          "fecha": "2026-11-04",
+          "demanda_estimada": 8.995651958885432
+        },
+        {
+          "fecha": "2026-11-05",
+          "demanda_estimada": 9.21807728563644
+        },
+        {
+          "fecha": "2026-11-06",
+          "demanda_estimada": 9.167638926001041
+        },
+        {
+          "fecha": "2026-11-07",
+          "demanda_estimada": 11.960184868439935
+        },
+        {
+          "fecha": "2026-11-08",
+          "demanda_estimada": 11.609042134707918
+        },
+        {
+          "fecha": "2026-11-09",
+          "demanda_estimada": 9.21224667591245
+        },
+        {
+          "fecha": "2026-11-10",
+          "demanda_estimada": 9.131577046466283
+        },
+        {
+          "fecha": "2026-11-11",
+          "demanda_estimada": 9.195059223307853
+        },
+        {
+          "fecha": "2026-11-12",
+          "demanda_estimada": 9.437889695850723
+        },
+        {
+          "fecha": "2026-11-13",
+          "demanda_estimada": 9.439387464852617
+        },
+        {
+          "fecha": "2026-11-14",
+          "demanda_estimada": 11.996663976062036
+        },
+        {
+          "fecha": "2026-11-15",
+          "demanda_estimada": 11.947028049845928
+        },
+        {
+          "fecha": "2026-11-16",
+          "demanda_estimada": 9.192434344813513
+        },
+        {
+          "fecha": "2026-11-17",
+          "demanda_estimada": 9.207439051978916
+        },
+        {
+          "fecha": "2026-11-18",
+          "demanda_estimada": 9.257080270508167
+        },
+        {
+          "fecha": "2026-11-19",
+          "demanda_estimada": 9.575926330742458
+        },
+        {
+          "fecha": "2026-11-20",
+          "demanda_estimada": 9.574905513994317
+        },
+        {
+          "fecha": "2026-11-21",
+          "demanda_estimada": 12.267366983944642
+        },
+        {
+          "fecha": "2026-11-22",
+          "demanda_estimada": 12.131537166056546
+        },
+        {
+          "fecha": "2026-11-23",
+          "demanda_estimada": 9.431883134521257
+        },
+        {
+          "fecha": "2026-11-24",
+          "demanda_estimada": 9.392942478463763
+        },
+        {
+          "fecha": "2026-11-25",
+          "demanda_estimada": 9.422850362357375
+        },
+        {
+          "fecha": "2026-11-26",
+          "demanda_estimada": 9.75148041892218
+        },
+        {
+          "fecha": "2026-11-27",
+          "demanda_estimada": 9.771265961894791
+        }
+      ],
+      "modelo": "AutoGluon",
+      "version_modelo": "1.6.1",
+      "historial_suficiente": true,
+      "advertencias": [
+        "Demanda histórica del CSV; cantidad no representa stock. Incluye registros marcados es_imputado.",
+        "No se completan fechas ausentes. El corte corresponde al último día importado anterior a hoy UTC.",
+        "El pronóstico usa exclusivamente AutoGluon y corresponde a las fechas posteriores al corte del dataset."
+      ]
+    },
+    "90": {
+      "id_almacen": "dff01e69-9219-495d-a94a-97df4dea6b5b",
+      "id_producto": "1f705e03-0afc-48fb-aff3-3fb42a900cc3",
+      "fecha_generacion": "2026-10-30T05:27:12.605090Z",
+      "fecha_corte": "2026-10-28",
+      "horizonte_dias": 90,
+      "fecha_inicio": "2026-10-29",
+      "fecha_fin": "2027-01-26",
+      "estado": "DISPONIBLE",
+      "demanda_total_estimada": 936.4746,
+      "predicciones_diarias": [
+        {
+          "fecha": "2026-10-29",
+          "demanda_estimada": 9.011990119504095
+        },
+        {
+          "fecha": "2026-10-30",
+          "demanda_estimada": 9.024783201869536
+        },
+        {
+          "fecha": "2026-10-31",
+          "demanda_estimada": 11.81951169610112
+        },
+        {
+          "fecha": "2026-11-01",
+          "demanda_estimada": 11.498898403783402
+        },
+        {
+          "fecha": "2026-11-02",
+          "demanda_estimada": 8.989140646647083
+        },
+        {
+          "fecha": "2026-11-03",
+          "demanda_estimada": 9.005683688124506
+        },
+        {
+          "fecha": "2026-11-04",
+          "demanda_estimada": 8.995651958885432
+        },
+        {
+          "fecha": "2026-11-05",
+          "demanda_estimada": 9.21807728563644
+        },
+        {
+          "fecha": "2026-11-06",
+          "demanda_estimada": 9.167638926001041
+        },
+        {
+          "fecha": "2026-11-07",
+          "demanda_estimada": 11.960184868439935
+        },
+        {
+          "fecha": "2026-11-08",
+          "demanda_estimada": 11.609042134707918
+        },
+        {
+          "fecha": "2026-11-09",
+          "demanda_estimada": 9.21224667591245
+        },
+        {
+          "fecha": "2026-11-10",
+          "demanda_estimada": 9.131577046466283
+        },
+        {
+          "fecha": "2026-11-11",
+          "demanda_estimada": 9.195059223307853
+        },
+        {
+          "fecha": "2026-11-12",
+          "demanda_estimada": 9.437889695850723
+        },
+        {
+          "fecha": "2026-11-13",
+          "demanda_estimada": 9.439387464852617
+        },
+        {
+          "fecha": "2026-11-14",
+          "demanda_estimada": 11.996663976062036
+        },
+        {
+          "fecha": "2026-11-15",
+          "demanda_estimada": 11.947028049845928
+        },
+        {
+          "fecha": "2026-11-16",
+          "demanda_estimada": 9.192434344813513
+        },
+        {
+          "fecha": "2026-11-17",
+          "demanda_estimada": 9.207439051978916
+        },
+        {
+          "fecha": "2026-11-18",
+          "demanda_estimada": 9.257080270508167
+        },
+        {
+          "fecha": "2026-11-19",
+          "demanda_estimada": 9.575926330742458
+        },
+        {
+          "fecha": "2026-11-20",
+          "demanda_estimada": 9.574905513994317
+        },
+        {
+          "fecha": "2026-11-21",
+          "demanda_estimada": 12.267366983944642
+        },
+        {
+          "fecha": "2026-11-22",
+          "demanda_estimada": 12.131537166056546
+        },
+        {
+          "fecha": "2026-11-23",
+          "demanda_estimada": 9.431883134521257
+        },
+        {
+          "fecha": "2026-11-24",
+          "demanda_estimada": 9.392942478463763
+        },
+        {
+          "fecha": "2026-11-25",
+          "demanda_estimada": 9.422850362357375
+        },
+        {
+          "fecha": "2026-11-26",
+          "demanda_estimada": 9.75148041892218
+        },
+        {
+          "fecha": "2026-11-27",
+          "demanda_estimada": 9.771265961894791
+        },
+        {
+          "fecha": "2026-11-28",
+          "demanda_estimada": 12.486873463822171
+        },
+        {
+          "fecha": "2026-11-29",
+          "demanda_estimada": 12.251890347336007
+        },
+        {
+          "fecha": "2026-11-30",
+          "demanda_estimada": 9.535602653252024
+        },
+        {
+          "fecha": "2026-12-01",
+          "demanda_estimada": 9.578139256736135
+        },
+        {
+          "fecha": "2026-12-02",
+          "demanda_estimada": 9.512057488897355
+        },
+        {
+          "fecha": "2026-12-03",
+          "demanda_estimada": 9.682500905403913
+        },
+        {
+          "fecha": "2026-12-04",
+          "demanda_estimada": 9.642094177783198
+        },
+        {
+          "fecha": "2026-12-05",
+          "demanda_estimada": 12.700632724991285
+        },
+        {
+          "fecha": "2026-12-06",
+          "demanda_estimada": 12.227889965956507
+        },
+        {
+          "fecha": "2026-12-07",
+          "demanda_estimada": 9.71339100647624
+        },
+        {
+          "fecha": "2026-12-08",
+          "demanda_estimada": 9.610711144964013
+        },
+        {
+          "fecha": "2026-12-09",
+          "demanda_estimada": 9.712685880882246
+        },
+        {
+          "fecha": "2026-12-10",
+          "demanda_estimada": 9.767996079985938
+        },
+        {
+          "fecha": "2026-12-11",
+          "demanda_estimada": 9.903363182569443
+        },
+        {
+          "fecha": "2026-12-12",
+          "demanda_estimada": 12.761850584538342
+        },
+        {
+          "fecha": "2026-12-13",
+          "demanda_estimada": 12.36020986303817
+        },
+        {
+          "fecha": "2026-12-14",
+          "demanda_estimada": 9.716267347160077
+        },
+        {
+          "fecha": "2026-12-15",
+          "demanda_estimada": 9.781982554267126
+        },
+        {
+          "fecha": "2026-12-16",
+          "demanda_estimada": 9.729990355059027
+        },
+        {
+          "fecha": "2026-12-17",
+          "demanda_estimada": 9.91153165862573
+        },
+        {
+          "fecha": "2026-12-18",
+          "demanda_estimada": 9.913304190630123
+        },
+        {
+          "fecha": "2026-12-19",
+          "demanda_estimada": 12.846115891289985
+        },
+        {
+          "fecha": "2026-12-20",
+          "demanda_estimada": 12.531307824134982
+        },
+        {
+          "fecha": "2026-12-21",
+          "demanda_estimada": 9.897854038467411
+        },
+        {
+          "fecha": "2026-12-22",
+          "demanda_estimada": 9.845369813285254
+        },
+        {
+          "fecha": "2026-12-23",
+          "demanda_estimada": 9.909874774391358
+        },
+        {
+          "fecha": "2026-12-24",
+          "demanda_estimada": 9.971075007552333
+        },
+        {
+          "fecha": "2026-12-25",
+          "demanda_estimada": 10.00007265666374
+        },
+        {
+          "fecha": "2026-12-26",
+          "demanda_estimada": 12.933038323326015
+        },
+        {
+          "fecha": "2026-12-27",
+          "demanda_estimada": 12.679522778727188
+        },
+        {
+          "fecha": "2026-12-28",
+          "demanda_estimada": 9.877956206798029
+        },
+        {
+          "fecha": "2026-12-29",
+          "demanda_estimada": 9.90990804716394
+        },
+        {
+          "fecha": "2026-12-30",
+          "demanda_estimada": 10.033946929186927
+        },
+        {
+          "fecha": "2026-12-31",
+          "demanda_estimada": 10.158619202754851
+        },
+        {
+          "fecha": "2027-01-01",
+          "demanda_estimada": 10.019806160284281
+        },
+        {
+          "fecha": "2027-01-02",
+          "demanda_estimada": 13.04726488071819
+        },
+        {
+          "fecha": "2027-01-03",
+          "demanda_estimada": 12.599538392834443
+        },
+        {
+          "fecha": "2027-01-04",
+          "demanda_estimada": 9.915414591223954
+        },
+        {
+          "fecha": "2027-01-05",
+          "demanda_estimada": 9.718588871030917
+        },
+        {
+          "fecha": "2027-01-06",
+          "demanda_estimada": 9.719582229965845
+        },
+        {
+          "fecha": "2027-01-07",
+          "demanda_estimada": 9.893358863967494
+        },
+        {
+          "fecha": "2027-01-08",
+          "demanda_estimada": 10.047893520798509
+        },
+        {
+          "fecha": "2027-01-09",
+          "demanda_estimada": 12.89846756908846
+        },
+        {
+          "fecha": "2027-01-10",
+          "demanda_estimada": 12.442533089321717
+        },
+        {
+          "fecha": "2027-01-11",
+          "demanda_estimada": 9.594255449815572
+        },
+        {
+          "fecha": "2027-01-12",
+          "demanda_estimada": 9.712404561633331
+        },
+        {
+          "fecha": "2027-01-13",
+          "demanda_estimada": 9.705295231097693
+        },
+        {
+          "fecha": "2027-01-14",
+          "demanda_estimada": 9.83971652944455
+        },
+        {
+          "fecha": "2027-01-15",
+          "demanda_estimada": 9.76823708044731
+        },
+        {
+          "fecha": "2027-01-16",
+          "demanda_estimada": 12.683831852394558
+        },
+        {
+          "fecha": "2027-01-17",
+          "demanda_estimada": 12.157400153248682
+        },
+        {
+          "fecha": "2027-01-18",
+          "demanda_estimada": 9.713272171819902
+        },
+        {
+          "fecha": "2027-01-19",
+          "demanda_estimada": 9.578993296947683
+        },
+        {
+          "fecha": "2027-01-20",
+          "demanda_estimada": 9.510194542421273
+        },
+        {
+          "fecha": "2027-01-21",
+          "demanda_estimada": 9.712063649840772
+        },
+        {
+          "fecha": "2027-01-22",
+          "demanda_estimada": 9.747642165252323
+        },
+        {
+          "fecha": "2027-01-23",
+          "demanda_estimada": 12.585428986750056
+        },
+        {
+          "fecha": "2027-01-24",
+          "demanda_estimada": 12.200027714467964
+        },
+        {
+          "fecha": "2027-01-25",
+          "demanda_estimada": 9.424081409170215
+        },
+        {
+          "fecha": "2027-01-26",
+          "demanda_estimada": 9.506068055504695
+        }
+      ],
+      "modelo": "AutoGluon",
+      "version_modelo": "1.6.1",
+      "historial_suficiente": true,
+      "advertencias": [
+        "Demanda histórica del CSV; cantidad no representa stock. Incluye registros marcados es_imputado.",
+        "No se completan fechas ausentes. El corte corresponde al último día importado anterior a hoy UTC.",
+        "El pronóstico usa exclusivamente AutoGluon y corresponde a las fechas posteriores al corte del dataset."
+      ]
+    }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "modo": "PREVIEW_SIN_ESCRITURAS",
+  "base": "psitwin_synthetic30_test",
+  "registros": {
+    "README": 1,
+    "Empresa": 1,
+    "Almacenes": 1,
+    "Zonas": 3,
+    "Racks": 6,
+    "Niveles": 10,
+    "Productos": 30,
+    "Ubicaciones_Productos": 30,
+    "Demanda_Historica": 11880,
+    "Movimientos": 13148,
+    "Inventario_Actual": 30,
+    "Pedidos": 11880,
+    "Validaciones": 35,
+    "Pronosticos_Referencia": 840
+  }
+}

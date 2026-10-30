@@ -1,0 +1,50 @@
+{
+  "archivo": "PsiTwin_Dataset_Pruebas_2025_2026.xlsx",
+  "sha256": "b070a83fcc28f2015fe3b0f62d9e61d320dd59fa093c5190e054936b3fac0bdc",
+  "pruebas": {
+    "backend_verificacion_final.log": 180,
+    "frontend_final_tests.log": 39,
+    "frontend_tests.log": 106
+  },
+  "playwright": {
+    "startTime": "2026-10-30T05:30:06.057Z",
+    "duration": 22643.146,
+    "expected": 2,
+    "skipped": 0,
+    "unexpected": 0,
+    "flaky": 0
+  },
+  "saiki_errores": 0,
+  "archivos_tarea": [
+    "backend/app/knowledge/catalogo_alimentos.json",
+    "backend/app/repositories/analisis_repository.py",
+    "backend/app/repositories/demanda_historica_repository.py",
+    "backend/app/services/analisis_service.py",
+    "backend/app/services/forecast_service.py",
+    "backend/app/services/inventory_risk_service.py",
+    "backend/app/services/saiki_catalog_queries.py",
+    "backend/app/services/saiki_demand.py",
+    "backend/app/services/saiki_inventario_detallado.py",
+    "backend/app/services/saiki_service.py",
+    "backend/app/services/saiki_warehouse_map.py",
+    "backend/app/services/warehouse_map_service.py",
+    "backend/scripts/empaquetar_dataset_pruebas.py",
+    "backend/scripts/evaluar_dataset_pruebas.py",
+    "backend/scripts/generar_dataset_pruebas.py",
+    "backend/scripts/importar_dataset_pruebas.py",
+    "backend/scripts/verificar_modelo_existente_pruebas.py",
+    "backend/scripts/verificar_recomendador_pruebas.py",
+    "backend/tests/synthetic30_browser_app.py",
+    "backend/tests/test_dataset_sintetico30.py",
+    "backend/tests/test_synthetic30_integration.py",
+    "docs/dataset_pruebas_30.md",
+    "frontend/e2e/synthetic30.spec.ts",
+    "frontend/playwright.synthetic30.config.ts",
+    "frontend/src/api/analisis.ts",
+    "frontend/src/api/inventarioConsultas.ts",
+    "frontend/src/features/almacenes/WarehouseMap.tsx",
+    "frontend/src/features/analisis/HistoricalDemandPanel.tsx",
+    "frontend/src/features/analisis/SyntheticDataset.test.tsx",
+    "tools/synthetic_workbook/preview.mjs"
+  ]
+}

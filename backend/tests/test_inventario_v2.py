@@ -18,6 +18,7 @@ from app.services.movimiento_service import MovimientoService
 from app.services.recepcion_mercaderia_service import RecepcionMercaderiaService
 from app.services.detalle_recepcion_service import DetalleRecepcionService
 from app.services.rack_service import RackService
+from app.services.nivel_service import NivelService
 from app.services.acceso_service import AccesoService
 from app.repositories.inventario_repository import InventarioRepository
 from app.repositories.detalle_inventario_repository import DetalleInventarioRepository
@@ -111,13 +112,16 @@ def db(monkeypatch):
         {"id_producto":"p","id_empresa":"e","nombre":"Producto","peso":2,"lead_time_dias":2,"categoria":"C"},
         {"id_producto":"q","id_empresa":"e","nombre":"Otro","peso":1,"lead_time_dias":1,"categoria":"C"},
         {"id_producto":"f","id_empresa":"other","peso":1}]
+    database['niveles'].rows = [
+        {'id_nivel': rack + '-n1', 'id_rack': rack, 'codigo': 'N-1', 'numero': 1, 'capacidad_kg': 100}
+        for rack in ('r1', 'r2', 'rb')]
     database["operarios"].rows=[{"id_operario":"op","id_empresa":"e","id_almacen":"a","estado":"ACTIVO","nombre":"Operario","apellido":"Uno"}]
     return database
 
 async def detail(header,product="p",rack="r1",stock=10,maximum=100):
     return await DetalleInventarioService().crear_inventario(
         DetalleInventarioCreate(id_inventario=header["id_inventario"],id_producto=product,
-            id_rack=rack,stock_actual=stock,stock_minimo=1,stock_maximo=maximum),"op")
+            id_rack=rack,id_nivel=rack + '-n1',stock_actual=stock,stock_minimo=1,stock_maximo=maximum),"op")
 
 def user():
     return UsuarioActual(rol="OPERARIO",id_empresa="e",id_operario="op",id_almacen="a")
@@ -140,8 +144,8 @@ def test_inventory_preserves_levels_and_rejects_duplicate_location(db):
     async def scenario():
         header = await InventarioRepository().garantizar('a')
         db['niveles'].rows = [
-            {'id_nivel': 'n1', 'id_rack': 'r1'},
-            {'id_nivel': 'n2', 'id_rack': 'r1'},
+            {'id_nivel': 'n1', 'id_rack': 'r1', 'codigo': 'N-1', 'capacidad_kg': 100},
+            {'id_nivel': 'n2', 'id_rack': 'r1', 'codigo': 'N-2', 'capacidad_kg': 100},
         ]
         service = DetalleInventarioService()
         def payload(level):
@@ -171,8 +175,8 @@ def test_distribution_filters_and_capacity(db):
         assert len(await service.detalles_inventario(header["id_inventario"],id_zona="z"))==3
         assert len(await service.detalles_inventario(header["id_inventario"],id_rack="r2"))==1
         assert len(await service.detalles_inventario(header["id_inventario"],id_producto="p"))==2
-        racks=await RackService.enriquecer(db["racks"].rows)
-        assert racks[0]["carga_kg"]==23 and racks[0]["libre_kg"]==77
+        levels=await NivelService.enriquecer(db["niveles"].rows)
+        assert levels[0]["carga_kg"]==23 and levels[0]["libre_kg"]==77
     run(scenario())
 
 @pytest.mark.parametrize("case,status",[("duplicate",409),("tenant",404),("warehouse",409),("capacity",409),("temperature",409),("maximum",409)])
@@ -254,7 +258,7 @@ def test_receipt_creates_location_once_and_preserves_ledger(db):
         header=await InventarioRepository().garantizar("a")
         prepare_order(db)
         request=RecepcionMercaderiaCreate(id_orden_reposicion="order",detalles=[{
-            "id_inventario":header["id_inventario"],"id_rack":"r1","stock_minimo":0,"stock_maximo":0,
+            "id_inventario":header["id_inventario"],"id_rack":"r1","id_nivel":"r1-n1","stock_minimo":0,"stock_maximo":0,
             "id_detalle_reposicion":"line","cantidad_recibida":10,"lote":"L1"}])
         receipt=await RecepcionMercaderiaService().crear(request,user())
         assert len(db["inventarios"].rows)==1
@@ -272,7 +276,7 @@ def test_receipt_rejects_cumulative_overdelivery_before_writes(db):
         header=await InventarioRepository().garantizar("a")
         prepare_order(db,5)
         request=RecepcionMercaderiaCreate(id_orden_reposicion="order",detalles=[
-            {"id_inventario":header["id_inventario"],"id_rack":rack,"stock_maximo":0,"id_detalle_reposicion":"line","cantidad_recibida":3}
+            {"id_inventario":header["id_inventario"],"id_rack":rack,"id_nivel":rack + "-n1","stock_maximo":0,"id_detalle_reposicion":"line","cantidad_recibida":3}
             for rack in ("r1","r2")])
         with pytest.raises(HTTPException) as caught: await RecepcionMercaderiaService().crear(request,user())
         assert caught.value.status_code==409
@@ -284,7 +288,7 @@ def test_evaluation_resolution_location_and_quantities(db,monkeypatch):
         header=await InventarioRepository().garantizar("a")
         prepare_order(db)
         receipt=await RecepcionMercaderiaService().crear(RecepcionMercaderiaCreate(
-            id_orden_reposicion="order",detalles=[{"id_inventario":header["id_inventario"],"id_rack":"r1",
+            id_orden_reposicion="order",detalles=[{"id_inventario":header["id_inventario"],"id_rack":"r1","id_nivel":"r1-n1",
             "stock_maximo":0,"id_detalle_reposicion":"line","cantidad_recibida":10,
             "estado_recepcion":"EN_EVALUACION","comentario_recepcion":"Inspección"}]),user())
         service=DetalleRecepcionService()
@@ -315,7 +319,7 @@ def test_alerts_deduplicate_by_product_not_header(db):
     run(scenario())
 
 def test_legacy_schema_is_explicitly_blocked(db):
-    db["inventarios"].rows=[{"id_inventario":"old","id_producto":"p","id_rack":"r1","stock_actual":10}]
+    db["inventarios"].rows=[{"id_inventario":"old","id_producto":"p","id_rack":"r1","id_nivel":"r1-n1","stock_actual":10}]
     with pytest.raises(HTTPException) as caught: run(InventarioRepository().garantizar("a"))
     assert caught.value.status_code==409
     assert len(db["inventarios"].rows)==1
@@ -375,7 +379,7 @@ def test_receipt_movement_failure_is_recoverable_without_false_acceptance(db):
         db["movimientos"].fail_insert=True
         with pytest.raises(RuntimeError):
             await RecepcionMercaderiaService().crear(RecepcionMercaderiaCreate(id_orden_reposicion="order",
-                detalles=[{"id_inventario":header["id_inventario"],"id_rack":"r1","stock_maximo":0,
+                detalles=[{"id_inventario":header["id_inventario"],"id_rack":"r1","id_nivel":"r1-n1","stock_maximo":0,
                 "id_detalle_reposicion":"line","cantidad_recibida":10}]),user())
         assert db["detalles_inventario"].rows[0]["stock_actual"]==0
         pending=db["detalles_recepcion"].rows[0]

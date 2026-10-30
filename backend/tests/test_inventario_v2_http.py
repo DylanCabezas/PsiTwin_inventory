@@ -31,9 +31,12 @@ def test_header_and_distribution_http(app,db):
         identifier=header.json()["id_inventario"]
         again=await request(app,"POST","/inventarios",json={"id_almacen":"a"})
         assert again.json()["id_inventario"]==identifier
+        missing_level=await request(app,"POST","/detalles-inventario",json={"id_inventario":identifier,
+            "id_producto":"p","id_rack":"r1","stock_actual":0,"stock_minimo":0,"stock_maximo":0})
+        assert missing_level.status_code==422
         for rack,stock in (("r1",10),("r2",5)):
             result=await request(app,"POST","/detalles-inventario",json={"id_inventario":identifier,
-                "id_producto":"p","id_rack":rack,"stock_actual":0,"stock_minimo":0,"stock_maximo":0})
+                "id_producto":"p","id_rack":rack,"id_nivel":rack + '-n1',"stock_actual":0,"stock_minimo":0,"stock_maximo":0})
             assert result.status_code==201,result.text
             db["detalles_inventario"].rows[-1]["stock_actual"] = stock  # existing-stock fixture; HTTP creates empty locations
         totals=await request(app,"GET",f"/inventarios/{identifier}/productos")

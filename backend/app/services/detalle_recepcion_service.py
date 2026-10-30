@@ -331,7 +331,8 @@ class DetalleRecepcionService:
                 await ProductoRepository.obtener_por_id(
                     inventario["id_producto"]
                 ) or {},
-                cantidad_aceptada
+                cantidad_aceptada,
+                id_nivel=inventario.get('id_nivel')
             )
 
         # ====================================================
@@ -536,7 +537,7 @@ class DetalleRecepcionService:
         location = SimpleNamespace(
             id_inventario=data.id_inventario or detalle["id_inventario"],
             id_detalle_inventario=data.id_detalle_inventario or (None if data.id_rack else detalle.get("id_detalle_inventario")),
-            id_rack=data.id_rack, stock_minimo=data.stock_minimo, stock_maximo=data.stock_maximo)
+            id_rack=data.id_rack, id_nivel=data.id_nivel, stock_minimo=data.stock_minimo, stock_maximo=data.stock_maximo)
         inventario = await self.resolver_ubicacion(location, linea["id_producto"], user, crear=True)
         id_inventario = inventario["id_inventario"]
         id_detalle_inventario = inventario["id_detalle_inventario"]
@@ -628,7 +629,8 @@ class DetalleRecepcionService:
             await ProductoRepository.obtener_por_id(
                 inventario["id_producto"]
             ) or {},
-            aceptada
+            aceptada,
+            id_nivel=inventario.get('id_nivel')
         )
 
         movimiento = await self.movimiento_service.crear_movimiento(
@@ -902,7 +904,7 @@ class DetalleRecepcionService:
         request = DetalleInventarioCreate(id_inventario=data.id_inventario,
             id_producto=id_producto, id_rack=rack_id, id_nivel=getattr(data, 'id_nivel', None), stock_actual=0,
             stock_minimo=getattr(data, "stock_minimo", 0), stock_maximo=maximum)
-        await RackService.validar_asignacion(rack, producto, 0)
+        await RackService.validar_asignacion(rack, producto, 0, id_nivel=request.id_nivel)
         if not crear:
             return {**request.model_dump(), "id_detalle_inventario": None}
         try:

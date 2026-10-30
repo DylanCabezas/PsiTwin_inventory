@@ -91,6 +91,9 @@
     "nombre": "Congelados",
     "refrigerada": true,
     "familias": {
+      "Helados": [
+        "Helados y postres fríos"
+      ],
       "Alimentos Congelados": [
         "Vegetales y frutas congeladas",
         "Platos preparados (pizzas, hamburguesas)",

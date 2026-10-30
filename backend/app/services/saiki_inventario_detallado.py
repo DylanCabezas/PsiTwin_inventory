@@ -16,7 +16,7 @@ async def inventario_contextual(data, user):
     values['estado'] = context.get('estado') if context.get('estado') in {'todos','stock-bajo','sin-stock','sobre-stock','normal'} else 'todos'
     text = normalizar(data.message or '')
     if 'agotad' in text: values['estado'] = 'sin-stock'
-    elif re.search(r'stock bajo|debajo.*minim|en el minimo|reposicion', text): values['estado'] = 'stock-bajo'
+    elif re.search(r'stock bajo|debajo.*minim|en el minimo', text): values['estado'] = 'stock-bajo'
     elif re.search(r'encima.*maxim|superior.*maxim|sobrestock', text): values['estado'] = 'sobre-stock'
     filters = InventarioFiltros(**values)
     result = await consultar_inventario(user, filters)

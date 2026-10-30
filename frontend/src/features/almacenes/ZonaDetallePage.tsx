@@ -1,16 +1,14 @@
-import { inventarioDetalleId } from '@/api/inventarios'
 /**
  * Detalle de zona: CRUD de racks mostrados como una grilla de posiciones (filas = niveles, color = estado)
  * y, para el rack seleccionado, el inventario que contiene (stock_actual vs mínimo/máximo con StockBadge).
  * El rack seleccionado se guarda en `?rack=<id>` para poder compartir el enlace.
  */
 import { useState } from 'react'
-import { Link, useParams, useSearchParams } from 'react-router'
+import { useParams, useSearchParams } from 'react-router'
 import { useAlmacen } from '@/api/almacenes'
 import { ApiError } from '@/api/client'
 import { ESTADO_RACK_LABEL, ESTADOS_RACK_EDITABLES } from '@/api/enums'
-import { useInventarios, useInventariosPorRack } from '@/api/inventarios'
-import { useProductos } from '@/api/productos'
+import { useInventarios } from '@/api/inventarios'
 import { useDeleteRack, useRacksPorZona } from '@/api/racks'
 import type { Inventario, Rack } from '@/api/types'
 import { useZona } from '@/api/zonas'
@@ -19,23 +17,20 @@ import {
   Badge,
   Button,
   Card,
-  DataTable,
   EmptyState,
   ErrorState,
   LinkButton,
   LoadingBlock,
   PageHeader,
   StatusBadge,
-  StockBadge,
 } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { formatNumero } from '@/lib/format'
-import { colorOcupacion, porcentajeCarga, temperaturaRack } from '@/lib/racks'
+import { temperaturaRack } from '@/lib/racks'
 import { paths } from '@/paths'
 import { EliminarDialog } from './EliminarDialog'
 import { RackGrilla } from './RackGrilla'
 import { RackFormModal } from './RackForm'
-import { NivelesPanel } from './NivelesPanel'
 import { agruparPorNivel, codigoRack, estiloRack } from './ubicacionUtils'
 
 export default function ZonaDetallePage() {
@@ -157,7 +152,7 @@ function Contenido({ idZona, back }: { idZona: string; back: { to: string; label
           <section aria-labelledby="titulo-grilla" className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
               <h2 id="titulo-grilla" className="label-stencil">
-                Posiciones <span className="tabular">({racks.length})</span>
+                Racks <span className="tabular">({racks.length})</span>
               </h2>
               <ul className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-fg-muted" aria-label="Leyenda de estados">
                 {estadosLeyenda.map((e) => (
@@ -169,8 +164,8 @@ function Contenido({ idZona, back }: { idZona: string; back: { to: string; label
               </ul>
             </div>
 
-            <RackGrilla racks={racks} invPorRack={invPorRack} seleccionado={seleccionado?.id_rack} onSelect={(r) => seleccionar(r.id_rack)} />
-            <p className="mt-2 text-xs text-fg-subtle">Selecciona una posición para ver su inventario. El nivel más alto se muestra arriba.</p>
+            <RackGrilla racks={racks} seleccionado={seleccionado?.id_rack} onSelect={(r) => seleccionar(r.id_rack)} />
+            <p className="mt-2 text-xs text-fg-subtle">Cada rack muestra sus niveles y los productos de cada nivel. Selecciona su cabecera para configurarlo.</p>
           </section>
 
           {seleccionado && (
@@ -229,10 +224,6 @@ function Contenido({ idZona, back }: { idZona: string; back: { to: string; label
 /* ------------------------------------------------------------------ */
 
 function RackPanel({ rack, codigo, onEditar, onEliminar }: { rack: Rack; codigo: string; onEditar?: () => void; onEliminar?: () => void }) {
-  const invQ = useInventariosPorRack(rack.id_rack)
-  const productosQ = useProductos()
-  const productoPorId = new Map((productosQ.data ?? []).map((p) => [p.id_producto, p]))
-  const pct = porcentajeCarga(rack)
   const temp = temperaturaRack(rack)
 
   return (
@@ -246,7 +237,7 @@ function RackPanel({ rack, codigo, onEditar, onEliminar }: { rack: Rack; codigo:
           <StatusBadge estado={rack.estado} />
         </span>
       }
-      description={`Máximo ${rack.max_niveles ?? 1} niveles · Carga máxima ${formatNumero(rack.capacidad)} kg${temp ? ` · ${temp}` : ''}`}
+      description={`${rack.tipo_rack || 'Tipo no definido'} · Hasta ${rack.max_niveles ?? 1} ${(rack.max_niveles ?? 1) === 1 ? 'nivel' : 'niveles'}${temp ? ` · ${temp}` : ''}`}
       actions={
         <>
           {onEditar && (
@@ -260,72 +251,6 @@ function RackPanel({ rack, codigo, onEditar, onEliminar }: { rack: Rack; codigo:
         </>
       }
       className="self-start xl:sticky xl:top-4"
-    >
-      <NivelesPanel rack={rack} />
-      {pct !== null && (
-        <div className="mb-4">
-          <div className="mb-1 flex justify-between text-xs text-fg-muted">
-            <span>Carga en el rack</span>
-            <span className="tabular font-mono">
-              {formatNumero(rack.carga_kg)} / {formatNumero(rack.capacidad)} kg · <strong className="text-fg">{formatNumero(rack.libre_kg)} kg libres</strong>
-            </span>
-          </div>
-          <div
-            className="h-2 overflow-hidden rounded-full bg-surface-3"
-            role="meter"
-            aria-label="Ocupación del rack"
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={Math.min(100, pct)}
-          >
-            <div className={cn('h-full rounded-full', colorOcupacion(pct))} style={{ width: `${Math.min(100, pct)}%` }} />
-          </div>
-        </div>
-      )}
-
-      <DataTable
-        caption={`Inventario del rack ${codigo}`}
-        data={invQ.data}
-        loading={invQ.isLoading}
-        error={invQ.error}
-        onRetry={() => void invQ.refetch()}
-        rowKey={inventarioDetalleId}
-        empty={<EmptyState compact icon="box" title="Rack vacío" description="Este rack no tiene inventario registrado." />}
-        columns={[
-          {
-            id: 'producto',
-            header: 'Producto',
-            mobile: 'title',
-            cell: (i) => {
-              const p = productoPorId.get(i.id_producto) ?? i.producto
-              return p ? (
-                <Link to={paths.producto(i.id_producto)} className="font-medium hover:underline">
-                  {p.nombre}
-                </Link>
-              ) : (
-                <span className="font-mono text-xs text-fg-subtle">{productosQ.isLoading ? 'Cargando…' : i.id_producto.slice(0, 8)}</span>
-              )
-            },
-          },
-          { id: 'estado', header: 'Estado', mobile: 'badge', cell: (i) => <StockBadge inventario={i} /> },
-          {
-            id: 'stock',
-            header: 'Actual',
-            align: 'right',
-            cell: (i) => <span className="tabular font-mono font-semibold">{formatNumero(i.stock_actual)}</span>,
-          },
-          {
-            id: 'rango',
-            header: 'Mín / Máx',
-            align: 'right',
-            cell: (i) => (
-              <span className="tabular font-mono text-fg-muted">
-                {formatNumero(i.stock_minimo)} / {formatNumero(i.stock_maximo)}
-              </span>
-            ),
-          },
-        ]}
-      />
-    </Card>
+    />
   )
 }

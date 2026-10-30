@@ -32,16 +32,18 @@ async def historical_answer(user, warehouse=None, product=None, message=''):
         return 'Selecciona el producto o almacén en los filtros para consultar su demanda histórica.', {}
     report = await DemandaHistoricaRepository().report(user.id_empresa, warehouse, product, start, end, limit=1)
     if not report['documentos']: return 'No hay registros históricos importados para estos filtros.', report
-    lines = [f"Demanda histórica del {report['fecha_inicio']} al {report['fecha_fin']}: {report['total']:.2f} unidades; promedio diario {report['promedio_diario']:.2f} en {report['dias_observados']} fechas presentes."]
+    unit = report.get('unidad') or 'unidad no registrada'
+    lines = ([f"Demanda histórica del {report['fecha_inicio']} al {report['fecha_fin']}: {report['total']:.2f} {unit}; promedio diario {report['promedio_diario']:.2f} en {report['dias_observados']} fechas presentes."]
+             if report['total'] is not None else ['La consulta incluye kg y unidades. Se muestran cantidades por producto; no se suman unidades diferentes ni se comparan como una misma magnitud.'])
     names = {r['id']: r['nombre'] for r in filters['productos'] + filters['almacenes']}
     lines.append('Productos con mayor demanda histórica (hasta 20, suma de los almacenes filtrados):')
     for row in report['ranking_productos']:
-        lines.append(f"{names.get(row['id_producto'], row['id_producto'])}: {row['cantidad']:.2f} unidades.")
+        lines.append(f"{names.get(row['id_producto'], row['id_producto'])}: {row['cantidad']:.2f} {row.get('unidad') or unit}.")
     lines.append('Series con mayor demanda histórica (hasta 20):')
     for row in report['ranking']:
         lines.append(f"{names.get(row['id_producto'], row['id_producto'])} / {names.get(row['id_almacen'], row['id_almacen'])}: {row['cantidad']:.2f} unidades.")
     trend = report['tendencia']
-    if trend['promedio_primera_mitad'] is not None:
+    if trend.get('promedio_primera_mitad') is not None:
         lines.append(f"Tendencia observada: promedio de la primera mitad {trend['promedio_primera_mitad']:.2f}, segunda mitad {trend['promedio_segunda_mitad']:.2f} unidades por fecha presente.")
     lines.append('Incluye registros marcados como imputados en el CSV. Es demanda histórica, no stock ni pronóstico. Para demanda futura se requiere un resultado válido de AutoGluon.')
     return '\n\n'.join(lines), report

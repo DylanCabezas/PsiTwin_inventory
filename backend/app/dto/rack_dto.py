@@ -63,9 +63,8 @@ class RackCreate(BaseModel):
         ge=1
     )
 
-    capacidad: float = Field(
-        gt=0
-    )
+    # Campo heredado; la capacidad de carga se configura en cada nivel.
+    capacidad: float = Field(default=0, ge=0)
 
     temperatura_min: float | None = None
 

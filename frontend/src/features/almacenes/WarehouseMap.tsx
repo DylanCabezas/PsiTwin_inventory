@@ -8,6 +8,7 @@ import { LinkButton } from '@/components/ui'
 import { paths } from '@/paths'
 import { useNavigate } from 'react-router'
 import { useRol } from '@/auth/useRol'
+import { formatNumero } from '@/lib/format'
 
 export const COLORES_NIVEL: Record<string, string> = {
   critico: 'bg-red-100 text-red-950 border-red-600', advertencia: 'bg-amber-100 text-amber-950 border-amber-600',
@@ -80,6 +81,9 @@ const WarehouseLevel = memo(function WarehouseLevel({n,names,onSelect}: {n: Plan
               }
               return <div key={n.id_nivel} data-nivel={n.id_nivel} data-estado={status} className={'rounded border-b-4 p-2 ' + (COLORES_NIVEL[status] ?? COLORES_NIVEL.sin_datos)}>
                 <button className="w-full text-left" onClick={() => onSelect()}><strong>Nivel {n.numero}{n.codigo && ' · ' + n.codigo}{!activo(n) && ' · ' + n.estado}</strong><span className="block break-words">{names.slice(0,3).join(', ') || 'Vacío'}</span></button>
+                <p className="mt-1 text-xs">{n.capacidad_kg == null ? 'Carga máxima sin configurar' : `${formatNumero(n.carga_kg ?? 0)} / ${formatNumero(n.capacidad_kg)} kg`}</p>
+                <p className="mt-1 text-xs">{!devices.length ? 'Sin datos de sensores' : status}</p>
+                {(n.productos_asignados ?? []).filter(name => !names.includes(name)).map(name => <p key={name} className="text-xs">{name} · asignado sin existencias disponibles</p>)}
                 {names.length > 3 && <details><summary>+{names.length-3} productos</summary><p className="break-words">{names.slice(3).join(', ')}</p></details>}
               </div>
 })
