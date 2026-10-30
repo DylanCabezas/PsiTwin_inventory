@@ -7,7 +7,7 @@ import { router } from '@/routes'
 
 export const queryClient = new QueryClient({
   mutationCache: new MutationCache({ onSuccess: () => {
-    void queryClient.invalidateQueries({ queryKey: ['plano'] })
+    return queryClient.invalidateQueries({ queryKey: ['plano'] })
   } }),
   defaultOptions: {
     queries: {

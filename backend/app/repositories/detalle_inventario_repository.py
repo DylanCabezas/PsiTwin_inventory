@@ -56,6 +56,7 @@ class DetalleInventarioRepository:
                 ),
 
             "id_inventario": data["id_inventario"],
+            "id_nivel": data.get("id_nivel"),
 
             "id_producto":
                 data["id_producto"],

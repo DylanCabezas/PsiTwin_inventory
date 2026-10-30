@@ -15,6 +15,20 @@ $runDir = Join-Path $projectRoot 'artifacts\run.local'
 $stateFile = Join-Path $runDir 'procesos.json'
 New-Item -ItemType Directory -Force -Path $runDir | Out-Null
 
+function Get-OwnedProcess($Entry) {
+    $candidate = Get-Process -Id $Entry.id -ErrorAction SilentlyContinue
+    if (-not $candidate) { return }
+    try {
+        $started = $candidate.StartTime
+        if ($null -ne $started -and $started.ToUniversalTime().ToString('o') -eq $Entry.started) {
+            return $candidate
+        }
+    } catch {
+        # El proceso pudo terminar o Windows puede denegar acceso a su fecha de inicio.
+        return
+    }
+}
+
 function Read-ProcessState {
     if (Test-Path -LiteralPath $stateFile) {
         function Expand-Entry($item) {
@@ -30,8 +44,8 @@ function Read-ProcessState {
 if ($Detener) {
     if (Test-Path -LiteralPath $stateFile) {
         foreach ($entry in @(Read-ProcessState)) {
-            $process = Get-Process -Id $entry.id -ErrorAction SilentlyContinue
-            if ($process -and $process.StartTime.ToUniversalTime().ToString('o') -eq $entry.started) {
+            $process = Get-OwnedProcess $entry
+            if ($process) {
                 Stop-Process -Id $process.Id
                 Write-Host "Detenido: $($entry.name)"
             }
@@ -119,8 +133,8 @@ try {
     }
     if (-not $frontendReady) {
         foreach ($entry in @($owned | Where-Object { $_.name -eq 'frontend' })) {
-            $previous = Get-Process -Id $entry.id -ErrorAction SilentlyContinue
-            if ($previous -and $previous.StartTime.ToUniversalTime().ToString('o') -eq $entry.started) {
+            $previous = Get-OwnedProcess $entry
+            if ($previous) {
                 Write-Host 'Reiniciando el frontend anterior que no responde...'
                 Stop-Process -Id $previous.Id
                 $previous.WaitForExit(5000) | Out-Null
@@ -147,8 +161,8 @@ try {
     if (-not $SinNavegador) { Start-Process 'http://localhost:5173' }
     Write-Host 'Deja esta terminal abierta mientras usas PsiTwin.'
     $activeIds = @($owned | ForEach-Object {
-        $active = Get-Process -Id $_.id -ErrorAction SilentlyContinue
-        if ($active -and $active.StartTime.ToUniversalTime().ToString('o') -eq $_.started) { $active.Id }
+        $active = Get-OwnedProcess $_
+        if ($active) { $active.Id }
     })
     if ($activeIds.Count) { Wait-Process -Id $activeIds -ErrorAction SilentlyContinue }
 } catch {

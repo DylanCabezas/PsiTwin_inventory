@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import type { Plano, UbicacionStock } from '@/api/inventarioConsultas'
-import { WarehouseMap, productosNivel } from './WarehouseMap'
+import { WarehouseMap, productosNivel, productosSinNivel } from './WarehouseMap'
 
 vi.mock('@/api/monitoreo', () => ({ useMonitoreoVivo: () => null }))
 
@@ -33,5 +35,47 @@ describe('WarehouseMap', () => {
     data.inventario.forEach(i => { if (i.producto === 'Papaya') i.id_nivel = 'n2' })
     expect(productosNivel(data,'n1')).toEqual([])
     expect(productosNivel(data,'n2')).toEqual(['Papaya'])
+  })
+  it('uses available quantities and shows rack stock without assigning a fictitious level', () => {
+    const data = plano()
+    data.inventario = [
+      { ...stock('Reservado'), cantidad_disponible: 0 },
+      { ...stock('Sin nivel'), id_rack: 'r', id_nivel: null },
+      { ...stock('Otro rack'), id_rack: 'other', id_nivel: null },
+    ]
+    expect(productosNivel(data, 'n1')).toEqual([])
+    expect(productosSinNivel(data, 'r')).toEqual(['Sin nivel'])
+    const html = renderToStaticMarkup(<WarehouseMap data={data} />)
+    expect(html).toContain('Productos sin nivel asignado:')
+    expect(html).toContain('Sin nivel')
+    expect(html).not.toContain('Reservado')
+    expect(html).not.toContain('Otro rack')
+  })
+  it('refreshes rack codes, types, level codes and product names in an already mounted map', async () => {
+    const host = document.createElement('div')
+    const root = createRoot(host)
+    try {
+      await act(async () => root.render(<WarehouseMap data={plano()} />))
+      expect(host.textContent).toContain('Papaya')
+      const updated = plano()
+      updated.racks[0]!.codigo = 'R-NUEVO'
+      updated.racks[0]!.tipo_rack = 'Refrigerado'
+      updated.niveles[0]!.codigo = 'N-RENOMBRADO'
+      updated.inventario = [stock('Mango actualizado')]
+      updated.racks.push({ ...updated.racks[0]!, id_rack: 'r2', codigo: 'R02' })
+      await act(async () => root.render(<WarehouseMap data={updated} />))
+      expect(host.textContent).toContain('Rack R-NUEVO — Refrigerado')
+      expect(host.textContent).toContain('Nivel 1 · N-RENOMBRADO')
+      expect(host.textContent).toContain('Mango actualizado')
+      expect(host.textContent).toContain('Rack R02')
+      expect(host.textContent).toContain('Sin niveles registrados')
+      expect(host.textContent).not.toContain('Papaya')
+      updated.racks = []
+      await act(async () => root.render(<WarehouseMap data={{ ...updated }} />))
+      expect(host.textContent).not.toContain('R-NUEVO')
+      expect(host.textContent).not.toContain('Mango actualizado')
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 })

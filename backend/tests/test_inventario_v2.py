@@ -136,6 +136,29 @@ def test_headers_idempotent_independent_and_warehouse_creation(db):
         assert "stock_actual" not in a
     run(scenario())
 
+def test_inventory_preserves_levels_and_rejects_duplicate_location(db):
+    async def scenario():
+        header = await InventarioRepository().garantizar('a')
+        db['niveles'].rows = [
+            {'id_nivel': 'n1', 'id_rack': 'r1'},
+            {'id_nivel': 'n2', 'id_rack': 'r1'},
+        ]
+        service = DetalleInventarioService()
+        def payload(level):
+            return DetalleInventarioCreate(id_inventario=header['id_inventario'],
+                id_producto='p' if level == 'n1' else 'q', id_rack='r1', id_nivel=level,
+                stock_actual=5, stock_minimo=1, stock_maximo=100)
+        await service._crear_detalle(payload('n1'))
+        await service._crear_detalle(payload('n2'))
+        rows = await InventarioService().detalles_inventario(header['id_inventario'])
+        assert {r['id_nivel'] for r in rows} == {'n1', 'n2'}
+        assert sum(r['stock_actual'] for r in rows) == 10
+        with pytest.raises(HTTPException) as caught:
+            await service._crear_detalle(payload('n1'))
+        assert caught.value.status_code == 409
+    run(scenario())
+
+
 def test_distribution_filters_and_capacity(db):
     async def scenario():
         header=await InventarioRepository().garantizar("a")

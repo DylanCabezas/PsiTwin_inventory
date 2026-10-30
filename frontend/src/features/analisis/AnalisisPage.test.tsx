@@ -8,13 +8,16 @@ import AnalisisPage from './AnalisisPage'
 const { useQuery } = vi.hoisted(() => ({ useQuery: vi.fn() }))
 vi.mock('@tanstack/react-query', () => ({ useQuery }))
 vi.mock('@/auth/useEmpresa', () => ({ useEmpresa: () => ({ empresa: { id_empresa: 'e', nombre: 'Empresa demo' } }) }))
-vi.mock('@/features/saiki/SaikiSession', () => ({ useSaikiSession: () => ({ pending: false }) }))
+vi.mock('@/features/saiki/SaikiSession', () => ({ useSaikiSession: () => ({ pending: false }), useSaikiSessionOptional: () => null }))
 vi.mock('react-router', () => ({ useNavigate: () => vi.fn() }))
 
 function queries() {
   useQuery.mockImplementation(({ queryKey }) => {
     const key = queryKey[1]
-    const data = key === 'filters' ? { almacenes: [{ id: 'w', nombre: 'Almacén demo 01' }], productos: [{ id: 'p', nombre: 'Producto demo' }] }
+    const data = key === 'catalogo' ? [{ id_producto: 'p', nombre: 'Producto demo' }]
+      : key === 'ofertas' ? []
+      : key === 'historial' ? { registros: [{ id_producto: 'p', id_origen: 'pedido-1', fecha: '2026-10-20T12:00:00Z', cantidad: 12, unidad: 'unidad', proveedor: 'Proveedor demo', estado: 'PENDIENTE' }] }
+      : key === 'filters' ? { almacenes: [{ id: 'w', nombre: 'Almacén demo 01' }], productos: [{ id: 'p', nombre: 'Producto demo' }] }
       : key === 'historico' ? { total: 7, promedio_diario: 7, documentos: 1, dias_observados: 1, fecha_inicio: '2025-01-01', fecha_fin: '2025-01-01', serie: [{ fecha: '2025-01-01', cantidad: 7 }], registros: [{ fecha: '2025-01-01', id_producto: 'p', id_almacen: 'w', cantidad: 7, es_imputado: false }], advertencias: [] }
       : key === 'metadata' ? { runtime: { validado: true } }
       : key === 'ranking' ? { filas: [], series_totales: 10 } : undefined
@@ -23,15 +26,17 @@ function queries() {
 }
 
 describe('Analysis views', () => {
-  it('opens history with one grouping control and no duplicated forecast panels or horizons', () => {
+  it('opens registered order charts without mixing dataset demand or forecasts', () => {
     queries()
     const html = renderToStaticMarkup(<AnalisisPage />)
-    expect(html).toContain('Ver historial por')
+    expect(html).toContain('Historial de pedidos')
+    expect(html).not.toContain('Ver historial por')
     expect(html).not.toContain('Días a pronosticar')
     expect(html).not.toContain('Acumulado a')
     expect(html).not.toContain('Demanda prevista y stock registrado')
-    expect(html).toContain('Almacén demo 01')
     expect(html).toContain('Producto demo')
+    expect(html).toContain('data-request="pedido-1"')
+    expect(html).not.toContain('<polyline')
     expect(useQuery.mock.calls.some(([q]) => q.queryKey[1] === 'ranking' && q.enabled)).toBe(false)
     expect(useQuery.mock.calls.some(([q]) => q.queryKey[1] === 'forecast' && q.enabled)).toBe(false)
   })

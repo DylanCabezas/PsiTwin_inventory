@@ -7,6 +7,8 @@ import { useSaikiSession } from '@/features/saiki/SaikiSession'
 import { paths } from '@/paths'
 import { useNavigate } from 'react-router'
 import { DemandChart } from './DemandChart'
+import { AnalysisDemo } from './AnalysisDemo'
+import { ForecastSeriesCard } from './ForecastSeriesCard'
 import { HistoricalDemandPanel } from './HistoricalDemandPanel'
 import { PedidosHistoryPanel } from '@/features/abastecimiento/PedidosHistoryPanel'
 
@@ -14,19 +16,20 @@ const n = (v: number | null | undefined) => v == null ? '—' : v.toLocaleString
 const STATES: Record<string, string> = { CALCULANDO: 'Calculando…', SIN_HISTORIAL: 'Sin historial', HISTORIAL_INSUFICIENTE: 'Historial insuficiente', MODELO_NO_DISPONIBLE: 'Modelo no disponible', ERROR_MODELO: 'Error de inferencia', DISPONIBLE: 'Disponible' }
 
 export default function AnalisisPage() {
+  const [demo, setDemo] = useState(false)
   const { empresa } = useEmpresa()
   const saiki = useSaikiSession()
   const navigate = useNavigate()
-  const [view, setView] = useState<'historial' | 'pronosticos' | 'pedidos'>('historial')
+  const [view, setView] = useState<'historial' | 'pronosticos' | 'pedidos'>('pedidos')
   const [warehouse, setWarehouse] = useState('')
-  const [product, setProduct] = useState('')
+  const [product, setProduct] = useState<string | null>(null)
   const [source, setSource] = useState('salidas')
   const [horizon, setHorizon] = useState<DemandHorizon>(30)
   const filters = useQuery({ queryKey: ['analisis', 'filters', empresa?.id_empresa], queryFn: analisisApi.filters, enabled: !!empresa })
   const warehouses = filters.data?.almacenes ?? []
   const products = filters.data?.productos ?? []
   const selectedWarehouse = warehouses.some(w => w.id === warehouse) ? warehouse : warehouses.length === 1 ? warehouses[0]!.id : ''
-  const selectedProduct = products.some(p => p.id === product) ? product : ''
+  const selectedProduct = product === null ? products[0]?.id ?? '' : products.some(p => p.id === product) ? product : ''
   const predicting = view === 'pronosticos'
   const meta = useQuery({ queryKey: ['analisis', 'metadata'], queryFn: analisisApi.metadata, enabled: predicting })
   const forecast = useQuery({ queryKey: ['analisis', 'forecast', empresa?.id_empresa, selectedWarehouse, selectedProduct, source], queryFn: () => analisisApi.forecast(selectedWarehouse, selectedProduct, source), enabled: predicting && !!selectedWarehouse && !!selectedProduct,
@@ -44,14 +47,16 @@ export default function AnalisisPage() {
     <header className="rounded-2xl border border-blue-400/20 bg-gradient-to-br from-[#101b38] via-[#172544] to-[#32234d] p-6 text-white">
       <p className="mb-3 font-mono text-[10px] tracking-[.3em] text-blue-200">PSITWIN / INTELIGENCIA DE DEMANDA</p><h1 className="text-3xl font-semibold">Análisis de demanda</h1><p className="mt-3 text-sm text-blue-100/70">Consulta la demanda histórica y futura para planificar tus existencias.</p>
     </header>
+    <div><Button variant={demo ? 'primary' : 'ghost'} onClick={() => setDemo(!demo)}>{demo ? 'Volver a datos de la empresa' : 'Ver gráficas con datos de ejemplo'}</Button></div>
+    {demo ? <AnalysisDemo /> : <>
     {view !== 'pedidos' && <Card><div className="grid gap-4 sm:grid-cols-3">
       <Field label="Empresa"><p className="flex h-10 items-center text-sm">{empresa?.nombre ?? 'Empresa autenticada'}</p></Field>
       <Field label="Almacén"><Select value={selectedWarehouse} onChange={e => setWarehouse(e.target.value)} placeholder="Todos los almacenes" options={warehouses.map(w => ({ value: w.id, label: w.nombre }))} /></Field>
       <Field label="Producto"><Select value={selectedProduct} onChange={e => setProduct(e.target.value)} placeholder="Todos los productos" options={products.map(p => ({ value: p.id, label: p.nombre }))} /></Field>
     </div></Card>}
     <div className="flex gap-3" role="group" aria-label="Vista del análisis">
-      <Button aria-pressed={view === 'pedidos'} variant={view === 'pedidos' ? 'primary' : 'ghost'} onClick={() => setView('pedidos')}>Pedidos de abastecimiento</Button>
-      <Button aria-pressed={view === 'historial'} variant={view === 'historial' ? 'primary' : 'ghost'} onClick={() => setView('historial')}>Historial</Button>
+      <Button aria-pressed={view === 'pedidos'} variant={view === 'pedidos' ? 'primary' : 'ghost'} onClick={() => setView('pedidos')}>Historial de pedidos</Button>
+      <Button aria-pressed={view === 'historial'} variant={view === 'historial' ? 'primary' : 'ghost'} onClick={() => setView('historial')}>Demanda registrada</Button>
       <Button aria-pressed={predicting} variant={predicting ? 'primary' : 'ghost'} onClick={() => setView('pronosticos')}>Pronósticos</Button>
     </div>
     {filters.isError && <p role="alert">No se pudieron cargar los filtros. <Button onClick={() => void filters.refetch()}>Reintentar</Button></p>}
@@ -70,14 +75,18 @@ export default function AnalisisPage() {
           <td className="p-3">{n(row.demanda_acumulada)} {row.unidad ?? ''}</td><td className="p-3">{n(row.stock_actual)}</td><td className="p-3">{n(row.brecha_stock)}</td><td className="p-3">{STATES[row.estado] ?? row.estado}</td>
         </tr>)}</tbody></table></div>
         {!ranking.data?.filas.length && <p className="py-4 text-sm">{ranking.isPending ? 'Consultando series…' : 'No hay series para estos filtros.'}</p>}
-        {!selectedProduct && <p className="mt-3 text-sm text-fg-muted">Selecciona un producto de la tabla para ver su curva y las fechas del pronóstico.</p>}
+        {!selectedProduct && <p className="mt-3 text-sm text-fg-muted">Se muestra una gráfica por producto y almacén. Selecciona un producto para ampliar su pronóstico.</p>}
       </Card>
       {selectedWarehouse && selectedProduct && forecast.data && <Card title={products.find(p => p.id === selectedProduct)?.nombre ?? 'Serie seleccionada'} description={`${STATES[forecast.data.estado]} · Corte del historial: ${forecast.data.fecha_corte}`}>
         <DemandChart history={forecast.data.historico} predictions={forecast.data.estado === 'DISPONIBLE' ? forecast.data.predicciones.slice(0, horizon) : []} />
         {forecast.data.detalle && <p role="status" className="mt-3 text-sm">{forecast.data.detalle}</p>}
         <p className="mt-3 text-xs text-fg-muted">Pronóstico posterior al corte del historial; no es una garantía de demanda futura.</p>
       </Card>}
+      {(!selectedProduct || !selectedWarehouse) && ranking.data?.filas.map(row => <ForecastSeriesCard key={`${row.id_almacen}|${row.id_producto}`}
+        tenant={empresa?.id_empresa ?? ''} warehouse={row.id_almacen} product={row.id_producto}
+        title={`${row.producto} · ${row.almacen}`} horizon={horizon} source={source} />)}
     </>}
     {view !== 'pedidos' && <div className="flex items-center justify-between gap-4 rounded-2xl border border-violet-400/20 p-5"><p>Consulta {predicting ? 'el pronóstico' : 'el historial'} con Saiki</p><Button disabled={saiki.pending} onClick={explain}>Preguntar a Saiki</Button></div>}
+    </>}
   </div>
 }

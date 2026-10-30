@@ -14,8 +14,14 @@ export const COLORES_NIVEL: Record<string, string> = {
   normal: 'bg-green-100 text-green-950 border-green-600', sin_datos: 'bg-slate-100 text-slate-950 border-slate-500',
   desconectado: 'bg-violet-100 text-violet-950 border-violet-600 border-dashed',
 }
+function nombresDisponibles(rows: Plano['inventario']) {
+  return [...new Set(rows.filter(i => (i.cantidad_disponible ?? i.stock_actual) > 0 && i.ubicacion_valida && !i.rechazado).map(i => i.producto))].sort((a,b) => a.localeCompare(b,'es'))
+}
 export function productosNivel(data: Plano, id: string) {
-  return [...new Set(data.inventario.filter(i => i.id_nivel === id && i.stock_actual > 0 && i.ubicacion_valida && !i.rechazado).map(i => i.producto))].sort((a,b) => a.localeCompare(b,'es'))
+  return nombresDisponibles(data.inventario.filter(i => i.id_nivel === id))
+}
+export function productosSinNivel(data: Plano, rack: string) {
+  return nombresDisponibles(data.inventario.filter(i => i.id_rack === rack && !i.id_nivel))
 }
 const activo = (r: { estado?: string }) => !['INACTIVO','DESACTIVADO','ARCHIVADO'].includes(r.estado ?? '')
 export const WarehouseMap = memo(function WarehouseMap({ data, onSelect }: { data: Plano; onSelect?: (zona: string, rack: string, nivel: string) => void }) {
@@ -29,7 +35,10 @@ export const WarehouseMap = memo(function WarehouseMap({ data, onSelect }: { dat
       return <section key={zid} className="rounded-xl border p-3"><h3 className="font-semibold">{z.nombre}{!activo(z) && <small> · {z.estado}</small>}</h3>
         <div className="grid gap-3 sm:grid-cols-2">{data.racks.filter(r => r.id_zona === zid && (filter === 'todos' || activo(r))).map(r => {
           const levels = data.niveles.filter(n => n.id_rack === r.id_rack && (filter === 'todos' || activo(n))).sort((a,b) => b.numero-a.numero)
+          const unassigned = productosSinNivel(data, r.id_rack)
           return <section key={r.id_rack} className="min-w-0 rounded-lg border p-3"><h4 className="font-semibold"><button onClick={() => onSelect?.(zid,r.id_rack,'')}>Rack {r.codigo} — {r.tipo_rack || 'Tipo no definido'}</button></h4><p className="text-sm">{levels.length} niveles{!activo(r) && ' · ' + r.estado}</p>
+            {!levels.length && <p className="mt-2 text-sm">Sin niveles registrados</p>}
+            {unassigned.length > 0 && <p className="mt-2 break-words text-sm"><strong>Productos sin nivel asignado: </strong>{unassigned.join(', ')}</p>}
             <div className="mt-2 space-y-2">{levels.map(n => {
               const names = productosNivel(data,n.id_nivel)
               return <WarehouseLevel key={n.id_nivel} n={n} names={names} onSelect={() => onSelect?.(zid,r.id_rack,n.id_nivel)} />
@@ -70,7 +79,7 @@ const WarehouseLevel = memo(function WarehouseLevel({n,names,onSelect}: {n: Plan
                 status = ['critico','advertencia','desconectado','sin_datos','normal'].find(s => states.includes(s)) ?? 'sin_datos'
               }
               return <div key={n.id_nivel} data-nivel={n.id_nivel} data-estado={status} className={'rounded border-b-4 p-2 ' + (COLORES_NIVEL[status] ?? COLORES_NIVEL.sin_datos)}>
-                <button className="w-full text-left" onClick={() => onSelect()}><strong>Nivel {n.numero}{!activo(n) && ' · ' + n.estado}</strong><span className="block break-words">{names.slice(0,3).join(', ') || 'Vacío'}</span></button>
+                <button className="w-full text-left" onClick={() => onSelect()}><strong>Nivel {n.numero}{n.codigo && ' · ' + n.codigo}{!activo(n) && ' · ' + n.estado}</strong><span className="block break-words">{names.slice(0,3).join(', ') || 'Vacío'}</span></button>
                 {names.length > 3 && <details><summary>+{names.length-3} productos</summary><p className="break-words">{names.slice(3).join(', ')}</p></details>}
               </div>
 })
